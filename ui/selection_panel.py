@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from typing import Optional
+from typing import Optional, Callable, Any
 
 
 def _coerce_series(x):
@@ -17,7 +17,7 @@ def _safe_key(base: str) -> str:
     return "".join([c if c.isalnum() else "_" for c in str(base)])
 
 
-def _render_checkbox_grid(container, options, list_key: str, ncols: int = 2):
+def _render_checkbox_grid(container, options, list_key: str, ncols: int = 2, format_func: Optional[Callable[[Any], str]] = None):
     """Render options as a grid of checkboxes inside the given container.
 
     Persists the selected options in st.session_state[list_key] (list of values).
@@ -44,14 +44,44 @@ def _render_checkbox_grid(container, options, list_key: str, ncols: int = 2):
         col = cols[i % ncols]
         chk_key = f"{list_key}__chk__{_safe_key(opt)}"
         default = True if (st.session_state.get(list_key) and opt in st.session_state.get(list_key)) else False
+        label = format_func(opt) if format_func is not None else str(opt)
         with col:
-            # create checkbox inside the provided container
-            container.checkbox(str(opt), value=default, key=chk_key)
+            # create checkbox inside the provided container (display label may be formatted)
+            container.checkbox(label, value=default, key=chk_key)
 
     # collect selection from individual checkbox keys and store as list
     selected = [opt for opt in options if st.session_state.get(f"{list_key}__chk__{_safe_key(opt)}", False)]
     st.session_state[list_key] = selected
     return selected
+
+
+def _device_time_range_for(df: pd.DataFrame, device: str) -> Optional[str]:
+    """Return a short date-range string for the given device based on timestamp columns.
+
+    Looks for common timestamp columns ('timestamp_parsed', 'Zeit', 'timestamp') and
+    returns 'YYYY-MM-DD' or 'YYYY-MM-DD–YYYY-MM-DD'. Returns None if no usable dates.
+    """
+    if df is None or df.empty or 'Sub-Kategorie' not in df.columns:
+        return None
+    sub = df[df['Sub-Kategorie'] == device]
+    if sub.empty:
+        return None
+    # prefer already parsed timestamps
+    for col in ('timestamp_parsed', 'Zeit', 'timestamp'):
+        if col in sub.columns:
+            try:
+                ts = pd.to_datetime(sub[col], errors='coerce')
+                ts = ts.dropna()
+                if ts.empty:
+                    continue
+                start = ts.min().date()
+                end = ts.max().date()
+                if start == end:
+                    return str(start)
+                return f"{start}  –  {end}"
+            except Exception:
+                continue
+    return None
 
 
 def render_selection_panel(df_1: Optional[pd.DataFrame], df_2: Optional[pd.DataFrame], df_3: Optional[pd.DataFrame], ecmo_df: Optional[pd.DataFrame], impella_df: Optional[pd.DataFrame], crrt_df: Optional[pd.DataFrame]):
@@ -121,7 +151,11 @@ def render_selection_panel(df_1: Optional[pd.DataFrame], df_2: Optional[pd.DataF
             devices = sorted(ser_devs.dropna().unique().tolist())
             if devices:
                 key_devices = "mcs_ecmo_devices"
-                selected_devices = st.multiselect("ECMO — Geräte auswählen (Mehrfach)", options=devices, key=key_devices)
+                # decorate device labels with time ranges
+                def _fmt_ecmo(dev):
+                    rng = _device_time_range_for(ecmo_df, dev)
+                    return f"{dev} ({rng})" if rng else dev
+                selected_devices = st.multiselect("ECMO — Geräte auswählen (Mehrfach)", options=devices, format_func=_fmt_ecmo, key=key_devices)
 
                 # Shared parameter filter for all selected ECMO devices
                 if 'Parameter' in ecmo_df.columns:
@@ -145,7 +179,10 @@ def render_selection_panel(df_1: Optional[pd.DataFrame], df_2: Optional[pd.DataF
             devices = sorted(ser_devs.dropna().unique().tolist())
             if devices:
                 key_devices = "mcs_impella_devices"
-                selected_devices = st.multiselect("Impella — Geräte auswählen (Mehrfach)", options=devices, key=key_devices)
+                def _fmt_imp(dev):
+                    rng = _device_time_range_for(impella_df, dev)
+                    return f"{dev} ({rng})" if rng else dev
+                selected_devices = st.multiselect("Impella — Geräte auswählen (Mehrfach)", options=devices, format_func=_fmt_imp, key=key_devices)
 
                 # Shared parameter filter for all selected Impella devices
                 if 'Parameter' in impella_df.columns:
@@ -171,7 +208,10 @@ def render_selection_panel(df_1: Optional[pd.DataFrame], df_2: Optional[pd.DataF
             if devices:
                 # select devices
                 key_devices = "rrt_devices"
-                selected_devices = st.multiselect("RRT — Geräte auswählen (Mehrfach)", options=devices, key=key_devices)
+                def _fmt_rrt(dev):
+                    rng = _device_time_range_for(crrt_df, dev)
+                    return f"{dev} ({rng})" if rng else dev
+                selected_devices = st.multiselect("RRT — Geräte auswählen (Mehrfach)", options=devices, format_func=_fmt_rrt, key=key_devices)
 
                 # shared parameter filter for all selected devices
                 # collect all parameters present in the dataset (or limit to selected devices)

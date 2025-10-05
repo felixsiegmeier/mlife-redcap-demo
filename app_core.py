@@ -205,4 +205,13 @@ def run_app():
         render_rrt(crrt_df, key_prefix="rrt_tab", start_dt=start_dt, end_dt=end_dt)
     elif view_choice == "Übersicht":
         from views.overview import render_overview
-        render_overview(key_prefixes=["df1_vitals", "df2_resp", "df3_lab", "mcs_tab", "rrt_tab"]) 
+        # Pass the actual DataFrames so overview can build editable copies
+        dfs = {
+            'df1_vitals': df_1,
+            'df2_resp': df_2,
+            'df3_lab': df_3,
+            'mcs_ecmo': ecmo_df,
+            'mcs_impella': impella_df,
+            'rrt': crrt_df,
+        }
+        render_overview(dfs=dfs, key_prefixes=["df1_vitals", "df2_resp", "df3_lab", "mcs_ecmo", "mcs_impella", "rrt"], start_dt=start_dt, end_dt=end_dt)

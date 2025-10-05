@@ -4,12 +4,11 @@ from typing import Optional
 
 # reuse checkbox-grid helper if available, otherwise define a small fallback
 try:
-    from ui.selection_panel import _render_checkbox_grid
+    from ui.selection_panel import _render_checkbox_grid, _device_time_range_for
 except Exception:
     def _safe_key(base: str) -> str:
         return "".join([c if c.isalnum() else "_" for c in str(base)])
-
-    def _render_checkbox_grid(container, options, list_key: str, ncols: int = 2):
+    def _render_checkbox_grid(container, options, list_key: str, ncols: int = 2, format_func=None):
         if not options:
             container.info("Keine Optionen vorhanden")
             st.session_state.setdefault(list_key, [])
@@ -25,11 +24,16 @@ except Exception:
             col = cols[i % ncols]
             chk_key = f"{list_key}__chk__{_safe_key(opt)}"
             default = True if (st.session_state.get(list_key) and opt in st.session_state.get(list_key)) else False
+            label = format_func(opt) if format_func is not None else str(opt)
             with col:
-                container.checkbox(str(opt), value=default, key=chk_key)
+                container.checkbox(label, value=default, key=chk_key)
         selected = [opt for opt in options if st.session_state.get(f"{list_key}__chk__{_safe_key(opt)}", False)]
         st.session_state[list_key] = selected
         return selected
+
+    def _device_time_range_for(df: pd.DataFrame, device: str) -> Optional[str]:
+        # fallback: no range information available
+        return None
 
 
 def render_therapy_view(df: Optional[pd.DataFrame], therapy_label: str, key_prefix: str, start_dt=None, end_dt=None):
@@ -61,7 +65,14 @@ def render_therapy_view(df: Optional[pd.DataFrame], therapy_label: str, key_pref
 
     key_devices = f"{key_prefix}_devices"
     # render device selection as checkbox grid for compactness and persistence
-    selected_devices = _render_checkbox_grid(st, devices, key_devices, ncols=2)
+    # decorate device labels with availability time ranges when possible
+    def _fmt_device(dev):
+        try:
+            rng = _device_time_range_for(df, dev)
+            return f"{dev} ({rng})" if rng else dev
+        except Exception:
+            return dev
+    selected_devices = _render_checkbox_grid(st, devices, key_devices, ncols=2, format_func=_fmt_device)
 
     # shared params
     all_params_ser = df['Parameter'] if 'Parameter' in df.columns else pd.Series([], dtype=object)
