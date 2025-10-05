@@ -17,7 +17,7 @@ if __name__ == "__main__":
     except Exception:
         pass
 
-    sys.argv = ["streamlit", "run", script, "--server.port=8501", "--server.headless=true"]
+    sys.argv = ["streamlit", "run", script, "--server.headless=true"]
     try:
         # Streamlit's CLI entrypoint
         from streamlit.web import cli as stcli
