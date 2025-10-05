@@ -30,7 +30,18 @@ jobs:
       - name: Build single-file EXE with PyInstaller
         run: |
           # Verwende app_launcher.py als Entry-Point, damit Streamlit korrekt startet
-          pyinstaller --clean --onefile --name clean_mlife_app --add-data "services;services" --add-data "med_examp.txt;." app_launcher.py --collect-all streamlit
+          pyinstaller --clean --onefile --name clean_mlife_app \
+            --add-data "services;services" \
+            --add-data "med_examp.txt;." \
+            --add-data "app.py;." \
+            --add-data "app_core.py;." \
+            --add-data "main.py;." \
+            --add-data "logging_config.py;." \
+            --add-data "requirements.txt;." \
+            --add-data "views;views" \
+            --add-data "ui;ui" \
+            --add-data "tools;tools" \
+            app_launcher.py --collect-all streamlit
 
       - name: List dist
         run: dir dist
