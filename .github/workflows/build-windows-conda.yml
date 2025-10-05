@@ -34,7 +34,7 @@ jobs:
       - name: Build single-file EXE with PyInstaller (conda)
         run: |
           # Verwende app_launcher.py als Entry-Point
-          pyinstaller --clean --onefile --name clean_mlife_app_conda --add-data "services;services" --add-data "med_examp.txt;." app_launcher.py
+          pyinstaller --clean --name clean_mlife_app_conda --add-data "services;services" --add-data "med_examp.txt;." app_launcher.py
         shell: bash
 
       - name: List dist
