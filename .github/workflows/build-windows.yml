@@ -28,7 +28,7 @@ jobs:
 
       - name: Build single-file EXE with PyInstaller
         run: |
-          pyinstaller --clean --onefile --name clean_mlife_app \
+          pyinstaller --clean --name clean_mlife_app \
             --add-data "services;services" \
             --add-data "views;views" \
             --add-data "ui;ui" \
@@ -52,4 +52,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-exe-clean-mlife
-          path: dist/clean_mlife_app.exe
+          path: dist/
