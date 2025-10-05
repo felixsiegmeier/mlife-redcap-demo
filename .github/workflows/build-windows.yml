@@ -8,6 +8,9 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,26 +27,26 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build single-file EXE with PyInstaller
-        run: >
-          pyinstaller --clean --onefile --name clean_mlife_app
-          --add-data "services;services"
-          --add-data "views;views"
-          --add-data "ui;ui"
-          --add-data "tools;tools"
-          --add-data "med_examp.txt;."
-          --add-data "requirements.txt;."
-          --add-data "app.py;."
-          --add-data "app_core.py;."
-          --add-data "main.py;."
-          --add-data "logging_config.py;."
-          --add-data "session_state_dump.json;."
-          --add-data "pyproject.toml;."
-          --add-data "uv.lock;."
-          --collect-all streamlit
-          app_launcher.py
+        run: |
+          pyinstaller --clean --onefile --name clean_mlife_app \
+            --add-data "services;services" \
+            --add-data "views;views" \
+            --add-data "ui;ui" \
+            --add-data "tools;tools" \
+            --add-data "med_examp.txt;." \
+            --add-data "requirements.txt;." \
+            --add-data "app.py;." \
+            --add-data "app_core.py;." \
+            --add-data "main.py;." \
+            --add-data "logging_config.py;." \
+            --add-data "session_state_dump.json;." \
+            --add-data "pyproject.toml;." \
+            --add-data "uv.lock;." \
+            --collect-all streamlit \
+            app_launcher.py
 
       - name: List dist
-        run: dir dist
+        run: ls -la dist
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
