@@ -72,7 +72,6 @@ def _parse_block_string(block_str: str, panel: str, DELIMITER=";"):
     return pd.DataFrame(rows)
 
 def parseNumerics(data: dict, DELIMITER: str = ";") -> pd.DataFrame:
-    print(data)
     """
     data: dict mit Panels und Strings (Blockstruktur mit ; getrennt)
     DELIMITER: Trennzeichen (default ";")
