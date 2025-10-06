@@ -212,6 +212,6 @@ def run_app():
             'df3_lab': df_3,
             'mcs_ecmo': ecmo_df,
             'mcs_impella': impella_df,
-            'rrt': crrt_df,
+            'rrt_tab': crrt_df,
         }
-        render_overview(dfs=dfs, key_prefixes=["df1_vitals", "df2_resp", "df3_lab", "mcs_ecmo", "mcs_impella", "rrt"], start_dt=start_dt, end_dt=end_dt)
+        render_overview(dfs=dfs, key_prefixes=["df1_vitals", "df2_resp", "df3_lab", "mcs_ecmo", "mcs_impella", "rrt_tab"], start_dt=start_dt, end_dt=end_dt)

@@ -1,6 +1,15 @@
 import streamlit as st
 import pandas as pd
 from typing import List, Optional
+try:
+    from ui.selection_panel import _render_checkbox_grid
+except Exception:
+    def _render_checkbox_grid(container, options, list_key: str, ncols: int = 2, format_func=None):
+        # minimal fallback: render simple multiselect
+        container.write("(Parameter-Auswahl-Fallback)")
+        val = container.multiselect("Parameter", options=options, key=list_key)
+        st.session_state[list_key] = val
+        return val
 
 
 def render_overview(dfs: Optional[dict] = None, key_prefixes: Optional[List[str]] = None, start_dt=None, end_dt=None) -> None:
@@ -60,6 +69,20 @@ def render_overview(dfs: Optional[dict] = None, key_prefixes: Optional[List[str]
             continue
         any_shown = True
         st.subheader(view_title)
+        # Ensure there are parameter selections; if not (fresh session on deploy), offer selection here
+        params_key = f"{prefix}_params"
+        if params_key not in st.session_state or not st.session_state.get(params_key):
+            # attempt to extract parameter options from df
+            param_opts = []
+            if df is not None:
+                if 'Parameter' in df.columns:
+                    param_opts = sorted(pd.Series(df['Parameter']).dropna().unique().tolist())
+                elif 'parameter' in df.columns:
+                    param_opts = sorted(pd.Series(df['parameter']).dropna().unique().tolist())
+            if param_opts:
+                with st.expander(f"Parameter-Auswahl für {view_title}", expanded=False):
+                    _render_checkbox_grid(st, param_opts, params_key, ncols=3)
+
         # Entscheide ob therapy-like (hat 'Sub-Kategorie') oder numeric
         df_show = pd.DataFrame()
         if 'Sub-Kategorie' in df.columns:
