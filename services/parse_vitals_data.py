@@ -7,7 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def parse_vitals(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
+def parse_vitals_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
     blocks = split_blocks(clean_file, DELIMITER)
     vitals_list = []
     DATE_RE = re.compile(r"\d{2}\.\d{2}\.\d{2,4}\s*\d{2}:\d{2}")
