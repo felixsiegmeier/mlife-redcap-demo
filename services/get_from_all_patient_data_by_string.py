@@ -1,7 +1,5 @@
 from typing import Dict, List, Optional
-
-from services.helpers import extract_all_patient_data_headers
-
+import json
 
 def get_from_all_patient_data_by_string(
     data: dict, query: str, DELIMITER: str = ";"
@@ -22,12 +20,12 @@ def get_from_all_patient_data_by_string(
     """
 
     # Alle bekannten Header extrahieren (aus helpers)
-    headers = extract_all_patient_data_headers(data["ALLE Patientendaten"], DELIMITER)
+    headers = extract_all_patient_data_headers(data.get("ALLE Patientendaten", {}), DELIMITER)
 
     # Nur die Header behalten, die den Suchbegriff enthalten (case-insensitiv)
     matching_headers = [header for header in headers if query.lower() in header.lower()]
 
-    lines = data["ALLE Patientendaten"].splitlines()
+    lines = data.get("ALLE Patientendaten", "").splitlines()
     # Ergebnis-Dict vorbereiten: jeder gefundene Header bekommt ein leeres Dict
     result: Dict[str, Dict[str, List[str]]] = {header: {} for header in matching_headers}
 
@@ -85,3 +83,17 @@ def get_from_all_patient_data_by_string(
         result[current_header].setdefault(current_sub_header, []).extend(buffer)
 
     return result
+
+def extract_all_patient_data_headers(data_str: str, DELIMITER: str = ";"):
+    """Input ist der String-Block 'ALLE Patientendaten'.
+
+    Liefert ein Set mit allen Überschriften, die als dritte Spalte in Zeilen
+    mit zwei führenden leeren Feldern erscheinen. (Konvention aus den CSV-Exporten.)
+    """
+    lines = data_str.splitlines()
+    headers_set = set()
+    for line in lines:
+        l = line.split(DELIMITER)
+        if len(l) > 2 and l[0] == "" and l[1] == "" and l[2] and l[2] != "Datum":
+            headers_set.add(l[2])
+    return headers_set

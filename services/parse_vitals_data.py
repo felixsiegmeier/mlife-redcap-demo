@@ -50,7 +50,7 @@ def parse_vitals_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
                 vitals_list.append(VitalsModel(
                     timestamp=timestamp,
                     value=value,
-                    category=key,
+                    category=key.strip(),
                     parameter=first_value[1]
                 ))
 

@@ -1,9 +1,11 @@
 from pathlib import Path
 from services.clean_csv import cleanCSV
 from services.split_blocks import split_blocks
-from services.parse_numerics import parseNumerics
+from services.parse_respiratory_data import parse_respiratory_data
 from services.parse_documentation import parseDocumentation
-from services.parse_vitals import parse_vitals
+from services.parse_vitals_data import parse_vitals_data
+from services.parse_lab_data import parse_lab_data
+from services.parse_ecmo_data import parse_ecmo_data
 import pandas as pd
 import json, logging
 from services.parse_from_all_patient_data import parse_from_all_patient_data
@@ -16,12 +18,13 @@ def main():
     DELIMITER = ";"
 
     clean_file = cleanCSV(file)
-    vitals = parse_vitals(clean_file, ";")
+    vitals = parse_vitals_data(clean_file, ";")
+    respiratory = parse_respiratory_data(clean_file, ";")
+    lab = parse_lab_data(clean_file, ";")
+    ecmo = parse_ecmo_data(clean_file, ";")
 
-    # with open("test.json", "w") as f:
-    #     f.write(json.dumps(vitals))
-
-    # print(df_4.head)
+    # with open("testecmo.json", "w") as f:
+    #     ecmo.to_json(f)
 
 if __name__ == "__main__":
     main()

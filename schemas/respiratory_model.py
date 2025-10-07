@@ -8,7 +8,6 @@ class RespiratoryModel(BaseModel):
     category: Optional[str] = Field(None, description="Subcategory of the measurement")
     parameter: Optional[str] = Field(None, description="Parameter name")
     value: Optional[float] = Field(None, description="Value of the measurement")
-    unit: Optional[str] = Field(None, description="Unit of the measurement")
 
     class Config:
         orm_mode = True
