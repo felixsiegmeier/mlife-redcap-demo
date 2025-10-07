@@ -1,5 +1,5 @@
 from services.split_blocks import split_blocks
-from schemas.vitals import Vitals
+from schemas.vitals_model import VitalsModel
 import pandas as pd
 import re
 from datetime import datetime
@@ -47,7 +47,7 @@ def parse_vitals_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
                         continue
                 if timestamp is None:
                     continue
-                vitals_list.append(Vitals(
+                vitals_list.append(VitalsModel(
                     timestamp=timestamp,
                     value=value,
                     category=key,
