@@ -1,6 +1,6 @@
 from services.headers import headers
 
-def splitBlocks(file: str, DELIMITER: str) -> dict:
+def split_blocks(file: str, DELIMITER: str) -> dict:
     lines = file.splitlines()
     result = {category: {} for category in headers}
     
