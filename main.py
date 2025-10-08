@@ -6,6 +6,7 @@ from services.parse_documentation import parseDocumentation
 from services.parse_vitals_data import parse_vitals_data
 from services.parse_lab_data import parse_lab_data
 from services.parse_ecmo_data import parse_ecmo_data
+from services.parse_impella_data import parse_impella_data
 import pandas as pd
 import json, logging
 from services.parse_from_all_patient_data import parse_from_all_patient_data
@@ -22,9 +23,10 @@ def main():
     respiratory = parse_respiratory_data(clean_file, ";")
     lab = parse_lab_data(clean_file, ";")
     ecmo = parse_ecmo_data(clean_file, ";")
+    impella = parse_impella_data(clean_file, ";")
 
-    # with open("testecmo.json", "w") as f:
-    #     ecmo.to_json(f)
+    with open("testimpella.json", "w") as f:
+        impella.to_json(f)
 
 if __name__ == "__main__":
     main()

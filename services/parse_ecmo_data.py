@@ -56,7 +56,7 @@ def parse_ecmo_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
             ecmo_list.append(EcmoModel(
                 timestamp=timestamp,
                 value=value,
-                category=key.strip("Labor:").strip(),
+                category=key,
                 parameter=parameter,
                 ))
 
