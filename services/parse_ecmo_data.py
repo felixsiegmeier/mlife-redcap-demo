@@ -5,7 +5,6 @@ import pandas as pd
 import re
 from datetime import datetime
 import logging
-import json
 
 logger = logging.getLogger(__name__)
 

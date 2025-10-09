@@ -28,8 +28,8 @@ def main():
     crrt = parse_crrt_data(clean_file, ";")
     medication = parse_medication_data(clean_file, ";")
 
-    with open("testcrrt.json", "w") as f:
-        crrt.to_json(f)
+    # with open("testcrrt.json", "w") as f:
+    #     crrt.to_json(f)
 
 if __name__ == "__main__":
     main()
