@@ -11,12 +11,9 @@ logger = logging.getLogger(__name__)
 
 def parse_medication_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
     blocks = split_blocks(clean_file, DELIMITER)
-    medication_blocks = blocks.get("Medikamentengaben", {})
+    medication_blocks = blocks.get("Medikamentengaben", {}).get("Medikamentengaben", "")
     medication_list = []
-    testlist = medication_blocks["Medikamentengaben"].splitlines()
-    print(testlist)
-    with open("testmedication.json", "w") as f:
-        json.dump(testlist, f)
+    medication_blocks = remove_linebreaks_in_cells(medication_blocks)
     return pd.DataFrame({})
     DATE_RE = re.compile(r"\d{2}\.\d{2}\.\d{2,4}\s*\d{2}:\d{2}")
 
@@ -88,3 +85,9 @@ def get_second_entry(l) -> str | None:
             continue
         return s
     return None
+
+
+def remove_linebreaks_in_cells(s: str) -> str:
+    def replacer(match):
+        return match.group(0).replace("\n", " ").replace("\r", "").replace("\"", "")
+    return re.sub(r'"(.*?)"', replacer, s, flags=re.DOTALL)
