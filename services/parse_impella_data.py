@@ -1,6 +1,6 @@
 from services.split_blocks import split_blocks
 from services.get_from_all_patient_data_by_string import get_from_all_patient_data_by_string
-from parse_schemas.impella_model import ImpellaModel
+from schemas.parse_schemas.impella import ImpellaModel
 import pandas as pd
 import re
 from datetime import datetime

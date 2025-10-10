@@ -1,6 +1,6 @@
 from services.split_blocks import split_blocks
 from services.get_from_all_patient_data_by_string import get_from_all_patient_data_by_string
-from schemas.ecmo_model import EcmoModel
+from schemas.parse_schemas.ecmo import EcmoModel
 import pandas as pd
 import re
 from datetime import datetime

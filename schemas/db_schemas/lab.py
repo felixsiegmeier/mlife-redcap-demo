@@ -13,7 +13,7 @@ class WithdrawalSite(str, Enum):
     ARTERIA_FEMORALIS_LEFT = "Arteria femoralis left"
     UNKNOWN = "unknown"
 
-class ArterialBloodGas(BaseModel):
+class ArterialBloodGasModel(BaseModel):
     pco2: Optional[float] = Field(None, description="pCO2 (mmHg)")
     po2: Optional[float] = Field(None, description="pO2 (mmHg)")
     ph: Optional[float] = Field(None, description="pH")

@@ -14,8 +14,8 @@ class MedicationModel(BaseModel):
     medication: str = Field(..., description="Name of the medication")
     category: Optional[str] = Field(None, description="Subcategory of the measurement")
     application: Optional[str] = Field(..., description="Kind of application")
-    start: datetime = Field(..., description="Timestamp of application or infusion start/ change")
-    stop: Optional[datetime | None] = Field(..., description="Timestamp of infusion stop")
+    start: Optional[datetime] = Field(None, description="Timestamp of application or infusion start/ change")
+    stop: Optional[datetime | None] = Field(None, description="Timestamp of infusion stop")
     concentration: Optional[str] = Field(None, description="Concentration of the medication")
     rate: Optional[float | None] = Field(None, description="Infusion rate of the medication")
 

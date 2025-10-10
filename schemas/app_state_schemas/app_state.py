@@ -1,0 +1,24 @@
+# state_model.py
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import datetime
+import pandas as pd
+
+class ParsedData(BaseModel):
+    # Allow arbitrary types such as pandas.DataFrame (pydantic v2)
+    model_config = {"arbitrary_types_allowed": True}
+    crrt: Optional[pd.DataFrame] = None
+    ecmo: Optional[pd.DataFrame] = None
+    impella: Optional[pd.DataFrame] = None
+    lab: Optional[pd.DataFrame] = None
+    medication: Optional[pd.DataFrame] = None
+    respiratory: Optional[pd.DataFrame] = None
+    vitals: Optional[pd.DataFrame] = None
+    fluidbalance: Optional[pd.DataFrame] = None
+
+class AppState(BaseModel):
+    # Allow arbitrary types in nested models (safe to include here as well)
+    model_config = {"arbitrary_types_allowed": True}
+    last_updated: Optional[datetime] = None
+    selected_patient_id: Optional[str] = None
+    parsed_data: Optional[ParsedData] = None

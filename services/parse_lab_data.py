@@ -1,5 +1,5 @@
 from services.split_blocks import split_blocks
-from parse_schemas.lab_model import LabModel
+from schemas.parse_schemas.lab import LabModel
 import pandas as pd
 import re
 from datetime import datetime

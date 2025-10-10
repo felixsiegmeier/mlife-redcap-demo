@@ -1,5 +1,5 @@
 from services.split_blocks import split_blocks
-from parse_schemas.vitals_model import VitalsModel
+from schemas.parse_schemas.vitals import VitalsModel
 import pandas as pd
 import re
 from datetime import datetime
