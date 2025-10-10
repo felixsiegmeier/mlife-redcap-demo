@@ -8,6 +8,7 @@ from services.parse_ecmo_data import parse_ecmo_data
 from services.parse_impella_data import parse_impella_data
 from services.parse_crrt_data import parse_crrt_data
 from services.parse_medication_data import parse_medication_data
+from services.parse_fluidbalance_data import parse_fluidbalance_data
 import pandas as pd
 import json, logging
 from services.parse_from_all_patient_data import parse_from_all_patient_data
@@ -27,9 +28,10 @@ def main():
     impella = parse_impella_data(clean_file, ";")
     crrt = parse_crrt_data(clean_file, ";")
     medication = parse_medication_data(clean_file, ";")
+    fluidbalance = parse_fluidbalance_data(clean_file, ";")
 
-    # with open("testcrrt.json", "w") as f:
-    #     crrt.to_json(f)
+    # with open("testmed.json", "w") as f:
+    #     medication.to_json(f)
 
 if __name__ == "__main__":
     main()
