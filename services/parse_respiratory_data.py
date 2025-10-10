@@ -1,5 +1,5 @@
 from services.split_blocks import split_blocks
-from schemas.respiratory_model import RespiratoryModel
+from parse_schemas.respiratory_model import RespiratoryModel
 import pandas as pd
 import re
 from datetime import datetime

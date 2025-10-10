@@ -1,5 +1,5 @@
 from services.split_blocks import split_blocks
-from schemas.medication_model import MedicationModel
+from parse_schemas.medication_model import MedicationModel
 import pandas as pd
 import re
 from datetime import datetime

@@ -1,5 +1,5 @@
 from services.split_blocks import split_blocks
-from schemas.medication_model import MedicationModel
+from parse_schemas.medication_model import MedicationModel
 import pandas as pd
 import re
 from datetime import datetime
@@ -15,7 +15,6 @@ def parse_medication_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
     medication_blocks = remove_linebreaks_in_cells(medication_blocks)
     medication_blocks = [line.split(DELIMITER) for line in medication_blocks.splitlines()]
     
-    #return pd.DataFrame({})
     DATE_RE = re.compile(r"\d{2}\.\d{2}\.\d{2,4}\s*\d{2}:\d{2}")
 
     buffer = []
@@ -87,9 +86,6 @@ def pack_medication(lines: list[list], header: list, DELIMITER: str = ";") -> li
                 stop=stop,
                 rate=rate
                 ))
-        # print(f"start {len(start_timestamps)} stop {len(stop_timestamps)} rate {len(rates)}")
-        # => start hat immer mindestens 1 eintrag und konsequent immer die meisten einträge
-        # also: darüber iterieren und wenn die anderen keine entrys mehr haben dann None
     return result
 
 def get_timestamps(l: list[str], i: int) -> list[datetime|None]:
@@ -105,7 +101,6 @@ def get_timestamps(l: list[str], i: int) -> list[datetime|None]:
 
 def get_rates(l: list[str], i: int) -> list[float|None]:
     rates = []
-    # Match integers or decimals with dot or comma, e.g. "5", "5.1", "3,0"
     for rate_str in re.findall(r"\d+(?:[.,]\d+)?", l[i]):
         try:
             rates.append(float(rate_str.replace(",", ".")))
