@@ -1,22 +1,17 @@
-from pathlib import Path
-from typing import Optional
 from state_provider.state_provider import get_state, save_state, parse_data_to_state
-from views import show_startpage, show_homepage
+from views.startpage import show_startpage
+from views.homepage import show_homepage
+from schemas.app_state_schemas.app_state import Views
 from datetime import datetime
-import streamlit as st
 
 def run_app():
-    # show_startpage returns (uploaded_file, delimiter)
-    # okay das geht alles nicht... hier ändern, sodass 
-    # direkt der view (startpage, homepage etc.) anhand des states selected_view
-    # ausgewählt wird (diesen implementieren als nächstes!)
-    uploaded_file, delimiter = show_startpage()
+    state = get_state()
 
-    if uploaded_file is not None:
-        file = uploaded_file.read().decode("utf-8")
-        state = parse_data_to_state(file, delimiter)
+    if state.selected_view == Views.STARTPAGE:
+        show_startpage()
+
+    elif state.selected_view == Views.HOMEPAGE:
         show_homepage()
-    
 
 if __name__ == "__main__":
     run_app()

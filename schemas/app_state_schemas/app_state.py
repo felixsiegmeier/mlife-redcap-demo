@@ -2,7 +2,12 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
+from enum import Enum
 import pandas as pd
+
+class Views(Enum):
+    HOMEPAGE = "homepage"
+    STARTPAGE = "startpage"
 
 class ParsedData(BaseModel):
     # Allow arbitrary types such as pandas.DataFrame (pydantic v2)
@@ -22,3 +27,4 @@ class AppState(BaseModel):
     last_updated: Optional[datetime] = None
     selected_patient_id: Optional[str] = None
     parsed_data: Optional[ParsedData] = None
+    selected_view: Views = Views.STARTPAGE

@@ -1,13 +1,26 @@
 import streamlit as st
+from state_provider.state_provider import save_state, parse_data_to_state, get_state
+from schemas.app_state_schemas.app_state import Views
 
 
 def show_startpage():
-    """Render a simple start/introduction page.
-
-    Note: the actual file uploader and delimiter selection are rendered in
-    `app.py` so that the startpage can be hidden immediately when a file is
-    present.
-    """
+    state = get_state()
     st.title("mLife Data Parser")
     st.write("Upload your CSV file 'Gesamte Akte' for processing:")
     st.markdown("\nWenn Sie eine Datei hochladen, wird diese Ansicht durch die Homepage ersetzt.")
+    delimiter = st.selectbox(
+            "Select delimiter:",
+            options=[";", "|"],
+            index=0,
+            help="Choose ';' or '|' as the delimiter for the CSV file"
+        )
+
+    uploaded_file = st.file_uploader("Choose a file", type="csv")
+
+    if uploaded_file is not None:
+        # Parse and switch to homepage
+        file = uploaded_file.read().decode("utf-8")
+        parse_data_to_state(file, delimiter)
+        state.selected_view = Views.HOMEPAGE
+        save_state(state)
+        st.rerun()  # Refresh to show homepage

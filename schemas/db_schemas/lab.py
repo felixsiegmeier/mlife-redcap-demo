@@ -33,7 +33,7 @@ class VitalsModel(BaseModel):
     date: datetime = Field(..., description="Date of the measurement")
     day_of_mcs: int = Field(..., description="Day of MCS")
     withdrawal_site: WithdrawalSite = Field(WithdrawalSite.UNKNOWN, description="withdrawal site of arterial blood")
-    arterial_blood_gas: ArterialBloodGas = Field(..., description="Arterial blood gas values")
+    arterial_blood_gas: ArterialBloodGasModel = Field(..., description="Arterial blood gas values")
     date_of_assessment: datetime = Field(..., description="Date of assessment")
     time_of_assessment: datetime = Field(..., description="Time of assessment")
     wbc: Optional[float] = Field(None, description="White blood cell count (10^9/L)")
