@@ -2,7 +2,7 @@ import streamlit as st
 from state_provider.state_provider import get_state
 
 
-def show_homepage():
+def render_homepage():
     st.header("Homepage")
     state = get_state()
     if not state:

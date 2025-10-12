@@ -3,7 +3,7 @@ from state_provider.state_provider import save_state, parse_data_to_state, get_s
 from schemas.app_state_schemas.app_state import Views
 
 
-def show_startpage():
+def render_startpage():
     state = get_state()
     st.title("mLife Data Parser")
     st.write("Upload your CSV file 'Gesamte Akte' for processing:")

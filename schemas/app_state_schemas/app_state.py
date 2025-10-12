@@ -28,3 +28,5 @@ class AppState(BaseModel):
     selected_patient_id: Optional[str] = None
     parsed_data: Optional[ParsedData] = None
     selected_view: Views = Views.STARTPAGE
+    time_range: Optional[tuple[datetime, datetime]] = None
+    selected_time_range: Optional[tuple[datetime, datetime]] = time_range
