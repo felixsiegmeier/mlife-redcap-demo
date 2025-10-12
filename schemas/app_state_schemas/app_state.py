@@ -8,6 +8,8 @@ import pandas as pd
 class Views(Enum):
     HOMEPAGE = "homepage"
     STARTPAGE = "startpage"
+    VITALS = "vitals"
+    LAB = "lab"
 
 class ParsedData(BaseModel):
     # Allow arbitrary types such as pandas.DataFrame (pydantic v2)
@@ -21,6 +23,11 @@ class ParsedData(BaseModel):
     vitals: Optional[pd.DataFrame] = None
     fluidbalance: Optional[pd.DataFrame] = None
 
+class UiState(BaseModel):
+    selected_categories : list[str] = []
+    selected_parameters : list[str] = []
+    show_median : bool = False
+
 class AppState(BaseModel):
     # Allow arbitrary types in nested models (safe to include here as well)
     model_config = {"arbitrary_types_allowed": True}
@@ -30,3 +37,6 @@ class AppState(BaseModel):
     selected_view: Views = Views.STARTPAGE
     time_range: Optional[tuple[datetime, datetime]] = None
     selected_time_range: Optional[tuple[datetime, datetime]] = time_range
+    vitals_ui: UiState = UiState()
+    lab_ui: UiState = UiState()
+    

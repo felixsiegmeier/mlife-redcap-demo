@@ -2,6 +2,21 @@ import streamlit as st
 from schemas.app_state_schemas.app_state import Views
 from state_provider.state_provider import get_state, save_state
 
+def explore_expander():
+    state = get_state()
+    
+    def go_to_vitals():
+        state.selected_view = Views.VITALS
+        save_state(state)
+
+    def go_to_lab():
+        state.selected_view = Views.LAB
+        save_state(state)
+
+    with st.expander(label="Explore Data"):
+        st.button("Vitals", key="vitals_button", on_click=go_to_vitals, width="stretch")
+        st.button("Lab", key="lab_button", on_click=go_to_lab, width="stretch")
+        
 
 def render_sidebar():
     sidebar = st.sidebar
@@ -29,4 +44,6 @@ def render_sidebar():
         if len(date_input_value) == 2:
             state.selected_time_range = (to_datetime(date_input_value[0]), to_datetime(date_input_value[1]))
             save_state(state)
-        st.button("Overview", on_click=go_to_homepage)
+        if state.parsed_data:
+            st.button("Overview", on_click=go_to_homepage, width="stretch")
+            explore_expander()
