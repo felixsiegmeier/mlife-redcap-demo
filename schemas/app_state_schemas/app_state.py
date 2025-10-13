@@ -5,11 +5,14 @@ from datetime import datetime
 from enum import Enum
 import pandas as pd
 
+from schemas.db_schemas.lab import LabModel
+
 class Views(Enum):
     HOMEPAGE = "homepage"
     STARTPAGE = "startpage"
     VITALS = "vitals"
     LAB = "lab"
+    LAB_FORM = "lab_form"
 
 class ParsedData(BaseModel):
     # Allow arbitrary types such as pandas.DataFrame (pydantic v2)
@@ -39,4 +42,5 @@ class AppState(BaseModel):
     selected_time_range: Optional[tuple[datetime, datetime]] = time_range
     vitals_ui: UiState = UiState()
     lab_ui: UiState = UiState()
+    lab_form: list[LabModel] | None = []
     

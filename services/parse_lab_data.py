@@ -27,12 +27,15 @@ def parse_lab_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
             if not first_value:
                 continue
             for i, token in enumerate(parts):
+                if i == first_value[0]:
+                    continue
                 if not isinstance(token, str) or token.strip() == "":
                     continue
-                tok = token.strip().replace(",", ".")
+                tok = token.strip().replace(",", ".").replace("(-)", "").replace("(+)", "")
                 try:
                     value = float(tok)
                 except (ValueError, TypeError):
+                    logger.warning("Could not convert token to float: %s", tok)
                     continue
                 try:
                     ts_str = timestamps[i]
@@ -56,6 +59,8 @@ def parse_lab_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
 
     result = pd.DataFrame([v.__dict__ for v in lab_list])
     logging.debug("Parsed %d lab rows", len(result))
+    with open("testlab.json", "w") as f:
+        f.write(result.to_json())
     return result
 
 def get_first_entry(l) -> tuple[int, str] | None:

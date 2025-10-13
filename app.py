@@ -4,6 +4,7 @@ from views.startpage import render_startpage
 from views.homepage import render_homepage
 from views.vitals_data import render_vitals_data
 from views.lab_data import render_lab_data
+from views.lab_form import  lab_form
 from schemas.app_state_schemas.app_state import Views
 from datetime import datetime
 import streamlit as st
@@ -27,6 +28,9 @@ def run_app():
 
     elif state.selected_view == Views.LAB:
         render_lab_data()
+
+    elif state.selected_view == Views.LAB_FORM:
+        lab_form()
 
 if __name__ == "__main__":
     run_app()

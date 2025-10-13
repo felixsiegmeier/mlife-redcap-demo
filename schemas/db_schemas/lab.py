@@ -26,7 +26,7 @@ class ArterialBloodGasModel(BaseModel):
     lactate: Optional[float] = Field(None, description="Lactate (mg/dL)")
     svo2: Optional[float] = Field(None, description="SvO2 (%)")
 
-class VitalsModel(BaseModel):
+class LabModel(BaseModel):
     date: datetime = Field(..., description="Timestamp of the measurement")
     mcs_last_24h: bool = Field(..., alias="mcs-last-24", description="MCS last 24 hours")
     ecls_and_impella_last_24h: bool = Field(..., alias="ecls-and-impella-last-24", description="ECLS and Impella last 24 hours")

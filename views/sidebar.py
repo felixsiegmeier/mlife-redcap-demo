@@ -17,6 +17,16 @@ def explore_expander():
         st.button("Vitals", key="vitals_button", on_click=go_to_vitals, width="stretch")
         st.button("Lab", key="lab_button", on_click=go_to_lab, width="stretch")
         
+def forms_expander():
+    state = get_state()
+
+    def go_to_lab_form():
+        state.selected_view = Views.LAB_FORM
+        save_state(state)
+
+    with st.expander(label="RedCap Forms"):
+        st.button("Lab", key="lab_form_button", on_click=go_to_lab_form, width="stretch")
+        
 
 def render_sidebar():
     sidebar = st.sidebar
@@ -47,3 +57,4 @@ def render_sidebar():
         if state.parsed_data:
             st.button("Overview", on_click=go_to_homepage, width="stretch")
             explore_expander()
+            forms_expander()
