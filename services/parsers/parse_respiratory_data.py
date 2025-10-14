@@ -1,5 +1,5 @@
-from services.split_blocks import split_blocks
-from schemas.parse_schemas.lab import LabModel
+from ..split_blocks import split_blocks
+from schemas.parse_schemas.respiratory import RespiratoryModel
 import pandas as pd
 import re
 from datetime import datetime
@@ -7,12 +7,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def parse_lab_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
+def parse_respiratory_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
     blocks = split_blocks(clean_file, DELIMITER)
-    lab_list = []
+    respiratory_list = []
     DATE_RE = re.compile(r"\d{2}\.\d{2}\.\d{2,4}\s*\d{2}:\d{2}")
 
-    for key, block_str in blocks.get("Labor", {}).items():
+    for key, block_str in blocks.get("Respiratordaten", {}).items():
         timestamps = None
         lines = [ln.rstrip('\r') for ln in block_str.splitlines()]
         for raw in lines:
@@ -27,15 +27,12 @@ def parse_lab_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
             if not first_value:
                 continue
             for i, token in enumerate(parts):
-                if i == first_value[0]:
-                    continue
                 if not isinstance(token, str) or token.strip() == "":
                     continue
-                tok = token.strip().replace(",", ".").replace("(-)", "").replace("(+)", "")
+                tok = token.strip().replace(",", ".")
                 try:
                     value = float(tok)
                 except (ValueError, TypeError):
-                    logger.warning("Could not convert token to float: %s", tok)
                     continue
                 try:
                     ts_str = timestamps[i]
@@ -50,17 +47,15 @@ def parse_lab_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
                         continue
                 if timestamp is None:
                     continue
-                lab_list.append(LabModel(
+                respiratory_list.append(RespiratoryModel(
                     timestamp=timestamp,
                     value=value,
-                    category=key.strip("Labor:").strip(),
+                    category=key.strip(),
                     parameter=first_value[1],
                 ))
 
-    result = pd.DataFrame([v.__dict__ for v in lab_list])
-    logging.debug("Parsed %d lab rows", len(result))
-    with open("testlab.json", "w") as f:
-        f.write(result.to_json())
+    result = pd.DataFrame([v.__dict__ for v in respiratory_list])
+    logging.debug("Parsed %d respiratory rows", len(result))
     return result
 
 def get_first_entry(l) -> tuple[int, str] | None:

@@ -31,7 +31,8 @@ import streamlit as st
 from typing import Any, Callable
 import pandas as pd
 from state_provider.state_provider import get_state, save_state
-from schemas.db_schemas.lab import ArterialBloodGasModel, LabModel, WithdrawalSite
+from services.value_aggregation.lab_aggregator import create_lab_entry
+from schemas.db_schemas.lab import WithdrawalSite
 
 
 LAB_FIELDS = {
@@ -193,113 +194,6 @@ class LabFormUI:
         self.render_controls()
         self.render_entries()
         self.render_submit_button()
-
-def create_lab_entry(date, selection):
-
-    def get_lab_value(date=date, category=None, parameter=None, selection=selection):
-        state = get_state()
-        lab_data = state.parsed_data.lab
-        if category and parameter:
-            filtered_data = lab_data[
-                (lab_data["timestamp"].dt.date == date) &
-                (lab_data["category"] == category) &
-                (lab_data["parameter"] == parameter)
-            ]
-            if not filtered_data.empty:
-                if selection == "median":
-                    return filtered_data["value"].median()
-                elif selection == "mean":
-                    return filtered_data["value"].mean()
-                elif selection == "last":
-                    return filtered_data["value"].iloc[-1]
-                elif selection == "first":
-                    return filtered_data["value"].iloc[0]
-        return None
-
-    arterial_blood_gas = ArterialBloodGasModel(
-        pco2=get_lab_value(date, "Blutgase arteriell", "PCO2 [mmHg]"),
-        po2=get_lab_value(date, "Blutgase arteriell", "PO2 [mmHg]"),
-        ph=get_lab_value(date, "Blutgase arteriell", "PH"),
-        hco3=get_lab_value(date, "Blutgase arteriell", "HCO3 [mmol\u00b7L\u207b\u00b9]"),
-        be=get_lab_value(date, "Blutgase arteriell", "ABEc [mmol\u00b7L\u207b\u00b9]"),
-        sao2=get_lab_value(date, "Blutgase arteriell", "O2-SAETTIGUNG [%]"),
-        kalium=get_lab_value(date, "Blutgase arteriell", "KALIUM(BG) [mmol\u00b7L\u207b\u00b9]"),
-        natrium=get_lab_value(date, "Blutgase arteriell", "NATRIUM(BG) [mmol\u00b7L\u207b\u00b9]"),
-        glucose=get_lab_value(date, "Blutgase arteriell", "GLUCOSE(BG) [mg\u00b7dL\u207b\u00b9]"),
-        lactate=get_lab_value(date, "Blutgase arteriell", "LACTAT(BG) [mg\u00b7dL\u207b\u00b9]"),
-        svo2=get_lab_value(date, "Blutgase ven\u00f6s", "O2-SAETTIGUNG [%]")
-    )
-    state = get_state()
-    ecmo_last_24h = False
-    impella_last_24h = False
-
-    # Check for ECMO entries on the given date or the day before
-    if hasattr(state.parsed_data, "ecmo"):
-        ecmo_data = state.parsed_data.ecmo
-        if not ecmo_data.empty:
-            ecmo_last_24h = any(
-                (ecmo_data["timestamp"].dt.date == date) |
-                (ecmo_data["timestamp"].dt.date == (date - pd.Timedelta(days=1)))
-            )
-
-    # Check for Impella entries on the given date or the day before
-    if hasattr(state.parsed_data, "impella"):
-        impella_data = state.parsed_data.impella
-        if not impella_data.empty:
-            impella_last_24h = any(
-                (impella_data["timestamp"].dt.date == date) |
-                (impella_data["timestamp"].dt.date == (date - pd.Timedelta(days=1)))
-            )
-
-    # Calculate day_of_mcs: days since the first MCS entry (ECMO or Impella)
-    min_date = None
-    if hasattr(state.parsed_data, "ecmo") and not state.parsed_data.ecmo.empty:
-        ecmo_min = state.parsed_data.ecmo["timestamp"].min()
-        if min_date is None or ecmo_min < min_date:
-            min_date = ecmo_min
-    if hasattr(state.parsed_data, "impella") and not state.parsed_data.impella.empty:
-        impella_min = state.parsed_data.impella["timestamp"].min()
-        if min_date is None or impella_min < min_date:
-            min_date = impella_min
-    if min_date is not None:
-        day_of_mcs = (date - min_date.date()).days + 1
-    else:
-        day_of_mcs = 0
-
-    return LabModel(
-        date=date,
-        **{
-            "mcs-last-24": ecmo_last_24h | impella_last_24h,
-            "ecls-and-impella-last-24": impella_last_24h & ecmo_last_24h,
-            "day_of_mcs": day_of_mcs,
-            "withdrawal_site": WithdrawalSite.UNKNOWN,
-            "arterial_blood_gas": arterial_blood_gas,
-            "date_of_assessment": date,
-            "time_of_assessment": date,
-            "wbc": get_lab_value(date, "Blutbild", "WBC [K\u00b7\u00b5L\u207b\u00b9]"),
-            "hb": get_lab_value(date, "Blutbild", "HB (HGB) [g\u00b7dL\u207b\u00b9]"),
-            "hct": get_lab_value(date, "Blutbild", "HCT [%]"),
-            "plt": get_lab_value(date, "Blutbild", "PLT [K\u00b7\u00b5L\u207b\u00b9]"),
-            "ptt": get_lab_value(date, "Gerinnung", "PTT [s]"),
-            "quick": get_lab_value(date, "Gerinnung", "TPZ [%]"),
-            "inr": get_lab_value(date, "Gerinnung", "INR"),
-            "act": None,
-            "ck": get_lab_value(date, "Enzyme", "CK [U\u00b7L\u207b\u00b9]"),
-            "ck_mb": get_lab_value(date, "Enzyme", "CK-MB [U\u00b7L\u207b\u00b9]"),
-            "ggt": get_lab_value(date, "Enzyme", "GGT [U\u00b7L\u207b\u00b9]"),
-            "ldh": get_lab_value(date, "Enzyme", "LDH [U\u00b7L\u207b\u00b9]"),
-            "lipase": get_lab_value(date, "Enzyme", "LIPASE [U\u00b7L\u207b\u00b9]"),
-            "albumin": None,
-            "crp": None,
-            "pct": get_lab_value(date, "Klinische Chemie", "PROCALCITONIN [ng\u00b7mL\u207b\u00b9]"),
-            "free_hb": get_lab_value(date, "Blutbild", "FREIES HB [mg\u00b7dL\u207b\u00b9]"),
-            "haptoglobin": None,
-            "total_bilirubin": get_lab_value(date, "Klinische Chemie", "BILI (TOT.) [mg\u00b7dL\u207b\u00b9]"),
-            "creatinine": get_lab_value(date, "Klinische Chemie", "KREATININ [mg\u00b7dL\u207b\u00b9]"),
-            "urea": get_lab_value(date, "Klinische Chemie", "HARNSTOFF [mg\u00b7dL\u207b\u00b9]"),
-            "creatinine_clearance": get_lab_value(date, "Klinische Chemie", "GFRKREA [mL\u00b7min\u207b\u00b9\u00b71.73\u207b\u00b9\u00b7m\u207b\u00b2]"),
-        }
-    )
 
 def create_lab_form_with_selection(selection):
     state = get_state()

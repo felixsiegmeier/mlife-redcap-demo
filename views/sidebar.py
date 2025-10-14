@@ -25,8 +25,7 @@ def forms_expander():
         save_state(state)
 
     with st.expander(label="RedCap Forms"):
-        st.button("Lab", key="lab_form_button", on_click=go_to_lab_form, width="stretch")
-        
+        st.button("Lab", key="lab_form_button", on_click=go_to_lab_form, width="stretch")    
 
 def render_sidebar():
     sidebar = st.sidebar

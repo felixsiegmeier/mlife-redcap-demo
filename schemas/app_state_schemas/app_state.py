@@ -6,6 +6,7 @@ from enum import Enum
 import pandas as pd
 
 from schemas.db_schemas.lab import LabModel
+from schemas.db_schemas.vitals import VitalsModel
 
 class Views(Enum):
     HOMEPAGE = "homepage"
@@ -13,6 +14,7 @@ class Views(Enum):
     VITALS = "vitals"
     LAB = "lab"
     LAB_FORM = "lab_form"
+    VITALS_FORM = "vitals_form"
 
 class ParsedData(BaseModel):
     # Allow arbitrary types such as pandas.DataFrame (pydantic v2)
@@ -43,4 +45,5 @@ class AppState(BaseModel):
     vitals_ui: UiState = UiState()
     lab_ui: UiState = UiState()
     lab_form: list[LabModel] | None = []
+    vitals_form: list[VitalsModel] | None = []
     

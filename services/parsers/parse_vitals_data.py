@@ -1,5 +1,5 @@
-from services.split_blocks import split_blocks
-from schemas.parse_schemas.respiratory import RespiratoryModel
+from ..split_blocks import split_blocks
+from schemas.parse_schemas.vitals import VitalsModel
 import pandas as pd
 import re
 from datetime import datetime
@@ -7,12 +7,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def parse_respiratory_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
+def parse_vitals_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
     blocks = split_blocks(clean_file, DELIMITER)
-    respiratory_list = []
+    vitals_list = []
     DATE_RE = re.compile(r"\d{2}\.\d{2}\.\d{2,4}\s*\d{2}:\d{2}")
 
-    for key, block_str in blocks.get("Respiratordaten", {}).items():
+    for key, block_str in blocks.get("Vitaldaten", {}).items():
         timestamps = None
         lines = [ln.rstrip('\r') for ln in block_str.splitlines()]
         for raw in lines:
@@ -47,16 +47,17 @@ def parse_respiratory_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
                         continue
                 if timestamp is None:
                     continue
-                respiratory_list.append(RespiratoryModel(
+                vitals_list.append(VitalsModel(
                     timestamp=timestamp,
                     value=value,
                     category=key.strip(),
-                    parameter=first_value[1],
+                    parameter=first_value[1]
                 ))
 
-    result = pd.DataFrame([v.__dict__ for v in respiratory_list])
-    logging.debug("Parsed %d respiratory rows", len(result))
+    result = pd.DataFrame([v.__dict__ for v in vitals_list])
+    logging.debug("Parsed %d vitals rows", len(result))
     return result
+
 
 def get_first_entry(l) -> tuple[int, str] | None:
     for i, entry in enumerate(l):

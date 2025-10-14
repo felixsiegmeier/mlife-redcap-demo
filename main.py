@@ -1,17 +1,18 @@
 from pathlib import Path
 from services.clean_csv import cleanCSV
 from services.split_blocks import split_blocks
-from services.parse_respiratory_data import parse_respiratory_data
-from services.parse_vitals_data import parse_vitals_data
-from services.parse_lab_data import parse_lab_data
-from services.parse_ecmo_data import parse_ecmo_data
-from services.parse_impella_data import parse_impella_data
-from services.parse_crrt_data import parse_crrt_data
-from services.parse_medication_data import parse_medication_data
-from services.parse_fluidbalance_data import parse_fluidbalance_data
+# parsing utilities
+from services.parsers.parse_respiratory_data import parse_respiratory_data
+from services.parsers.parse_vitals_data import parse_vitals_data
+from services.parsers.parse_lab_data import parse_lab_data
+from services.parsers.parse_ecmo_data import parse_ecmo_data
+from services.parsers.parse_impella_data import parse_impella_data
+from services.parsers.parse_crrt_data import parse_crrt_data
+from services.parsers.parse_medication_data import parse_medication_data
+from services.parsers.parse_fluidbalance_data import parse_fluidbalance_data
 import pandas as pd
 import json, logging
-from services.parse_from_all_patient_data import parse_from_all_patient_data
+from services.parsers.parse_from_all_patient_data import parse_from_all_patient_data
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s: %(message)s")
 

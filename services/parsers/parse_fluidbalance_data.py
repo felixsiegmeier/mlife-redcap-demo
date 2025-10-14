@@ -1,4 +1,4 @@
-from services.split_blocks import split_blocks
+from ..split_blocks import split_blocks
 from schemas.parse_schemas.medication import MedicationModel
 import pandas as pd
 import re
@@ -6,25 +6,33 @@ from datetime import datetime
 import logging
 import json
 
+# das könnte ein Problem werden - mLife exportiert hier nur 117h-Blöcke
+# -> ich muss schauen, ob da ein anderer Export möglich ist.
+
 logger = logging.getLogger(__name__)
 
-def parse_medication_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
+def parse_fluidbalance_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
     blocks = split_blocks(clean_file, DELIMITER)
-    medication_blocks = blocks.get("Medikamentengaben", {}).get("Medikamentengaben", "")
-    medication_list = []
-    medication_blocks = remove_linebreaks_in_cells(medication_blocks)
-    medication_blocks = [line.split(DELIMITER) for line in medication_blocks.splitlines()]
+    fluidbalance_blocks = blocks.get("Bilanz", {}).get("Bilanz", "")
+    fluidbalance_list = []
+    fluidbalance_blocks = remove_linebreaks_in_cells(fluidbalance_blocks)
+    fluidbalance_blocks = [line.split(DELIMITER) for line in fluidbalance_blocks.splitlines()]
     
     DATE_RE = re.compile(r"\d{2}\.\d{2}\.\d{2,4}\s*\d{2}:\d{2}")
+    
+    with open("fluidtest.json", "w") as f:
+        json.dump(fluidbalance_blocks, f)
+    
+    return pd.DataFrame({})
 
     buffer = []
     last_header = None
-    for line in medication_blocks:
+    for line in fluidbalance_blocks:
         if is_header(line):
             if line == last_header:
                 continue
             if buffer and last_header:
-                medication_list.extend(pack_medication(buffer, last_header, DELIMITER))
+                fluidbalance_list.extend(pack_medication(buffer, last_header, DELIMITER))
                 buffer = []
             last_header = line
             continue

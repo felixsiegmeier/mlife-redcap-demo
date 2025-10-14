@@ -1,6 +1,6 @@
 import pandas as pd
 import re
-from services.get_from_all_patient_data_by_string import get_from_all_patient_data_by_string
+from ..get_from_all_patient_data_by_string import get_from_all_patient_data_by_string
 
 def parse_from_all_patient_data(dataset: dict, querry: str, DELIMITER: str = ";") -> pd.DataFrame:
     data = get_from_all_patient_data_by_string(dataset, querry, DELIMITER)
