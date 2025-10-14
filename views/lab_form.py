@@ -1,10 +1,38 @@
+
+"""
+Lab Form Module - Program Flow Summary
+
+Program Flow:
+1. lab_form() is the entry point, called from the main app.
+2. It retrieves the application state using get_state().
+3. Instantiates LabFormUI with the state.
+4. Calls ui.lab_form(), which renders the entire UI:
+   - Title
+   - Controls (selectbox for value calculation method, update hint, create/update button)
+   - Lab entries as expanders (editable forms for each day)
+   - Submit button (placeholder for RedCap integration)
+5. User interactions:
+   - Changing the selectbox triggers show_update_hint(), setting a session_state flag to show an info message.
+   - Pressing the create/update button calls create_lab_form_with_selection(), which:
+     - Clears existing lab_form in state
+     - Iterates over selected_time_range, creating lab entries via create_lab_entry()
+     - Saves state
+   - Then sets the hint flag to False and reruns the app.
+6. Each lab entry is editable via widgets (number_input, checkbox, selectbox, date_input) with on_change callbacks that update the state and save it.
+7. create_lab_entry() aggregates lab data from parsed_data based on the selected method (median, mean, last, first) for each parameter.
+
+Key Components:
+- LabFormUI class: Encapsulates UI logic and state management.
+- LAB_FIELDS dict: Defines field configurations for dynamic rendering.
+- Callbacks ensure real-time updates and persistence via state_provider.
+"""
+
 import streamlit as st
-from state_provider.state_provider import get_state, save_state
-from enum import Enum
-from datetime import datetime
+from typing import Any, Callable
 import pandas as pd
+from state_provider.state_provider import get_state, save_state
 from schemas.db_schemas.lab import ArterialBloodGasModel, LabModel, WithdrawalSite
-from typing import Optional, Callable, Any
+
 
 LAB_FIELDS = {
     "general": {
@@ -66,14 +94,22 @@ class LabFormUI:
     def __init__(self, state: Any) -> None:
         """Initialize with the application state."""
         self.state = state
+        self.selection = "median"
+    
+    def show_update_hint(self) -> None:
+        """Set a flag to show update hint when selection changes."""
+        st.session_state['show_update_hint'] = True
     
     def render_controls(self) -> None:
         """Render the controls for selecting lab value calculation and creating/updating forms."""
-        selection = st.selectbox("Selection", options=["median", "mean", "last", "first"], index=2)
+        self.selection = st.selectbox("Value Calculation Method", options=["median", "mean", "last", "first"], index=0, key="selection_method", on_change=self.show_update_hint)
+        if st.session_state.get('show_update_hint', False):
+            st.info("Please press the 'Create/Update Lab Form for selected Time Range' button to apply the changes.")
         if st.button("Create/Update Lab Form for selected Time Range"):
-            create_lab_form_with_selection(selection)
+            create_lab_form_with_selection(self.selection)
+            st.session_state['show_update_hint'] = False
             st.rerun()
-    
+
     def update_lab_field(self, index: int, field: str) -> Callable[[], None]:
         """Create a callback function to update a lab field for a specific entry."""
         def inner() -> None:
@@ -104,17 +140,22 @@ class LabFormUI:
     
     def render_widget(self, config: dict, value: Any, index: int, field: str) -> None:
         """Render a Streamlit widget based on the config."""
+        key = f'{index}_{field}'
         if config["type"] == "number":
-            st.number_input(config["label"], value=value, step=config.get("step"), key=f'{index}_{field}', on_change=self.update_lab_field(index, field))
+            st.session_state[key] = value
+            st.number_input(config["label"], value=value, step=config.get("step"), key=key, on_change=self.update_lab_field(index, field))
         elif config["type"] == "checkbox":
-            st.checkbox(config["label"], value=value, key=f'{index}_{field}', on_change=self.update_lab_field(index, field))
+            st.session_state[key] = value
+            st.checkbox(config["label"], value=value, key=key, on_change=self.update_lab_field(index, field))
         elif config["type"] == "selectbox":
             options = config["options"]
             current_value = value.value if hasattr(value, 'value') else value
+            st.session_state[key] = current_value
             sel_index = options.index(current_value)
-            st.selectbox(config["label"], options=options, index=sel_index, key=f'{index}_{field}', on_change=self.update_lab_field(index, field))
+            st.selectbox(config["label"], options=options, index=sel_index, key=key, on_change=self.update_lab_field(index, field))
         elif config["type"] == "date":
-            st.date_input(config["label"], value=value, key=f'{index}_{field}', on_change=self.update_lab_field(index, field))
+            st.session_state[key] = value
+            st.date_input(config["label"], value=value, key=key, on_change=self.update_lab_field(index, field))
     
     def display_lab_entry(self, index: int) -> None:
         """Display the editable form for a single lab entry."""
@@ -139,12 +180,19 @@ class LabFormUI:
             for i in range(len(self.state.lab_form)):
                 with st.expander(f"Lab Entry for {self.state.lab_form[i].date.date()}", width="stretch"):
                     self.display_lab_entry(i)
-    
+
+    def render_submit_button(self) -> None:
+        """Render the submit button for the lab form."""
+        if self.state.lab_form:
+            if st.button("Send Lab Data to RedCap"):
+                st.warning("Not implemented")
+
     def lab_form(self) -> None:
         """Main method to render the entire lab form UI."""
         st.title("Lab Form")
         self.render_controls()
         self.render_entries()
+        self.render_submit_button()
 
 def create_lab_entry(date, selection):
 
@@ -262,10 +310,10 @@ def create_lab_form_with_selection(selection):
         while current_date <= end_date:
             date = current_date.date()
             lab_entry = create_lab_entry(date, selection)
+            print(lab_entry)
             state.lab_form.append(lab_entry)
             current_date += pd.Timedelta(days=1)
     save_state(state)
-    st.rerun()
 
 def lab_form() -> None:
     """Entry point for the lab form view."""
