@@ -20,4 +20,4 @@ class MedicationModel(BaseModel):
     rate: Optional[float | None] = Field(None, description="Infusion rate of the medication")
 
     class Config:
-        orm_mode = True
+        from_attributes = True

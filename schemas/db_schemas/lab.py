@@ -60,4 +60,4 @@ class LabModel(BaseModel):
     creatinine_clearance: Optional[float] = Field(None, description="Creatinine clearance (mL/min)")
 
     class Config:
-        orm_mode = True
+        from_attributes = True

@@ -10,5 +10,5 @@ class CrrtModel(BaseModel):
     value: Optional[Union[float, str]] = Field(None, description="Value of the measurement")
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 

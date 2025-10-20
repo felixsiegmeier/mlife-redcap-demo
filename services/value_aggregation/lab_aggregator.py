@@ -15,14 +15,27 @@ def get_lab_value(date, category=None, parameter=None, selection="median"):
                 (lab_data["parameter"] == parameter)
             ]
             if not filtered_data.empty:
-                if selection == "median":
-                    return filtered_data["value"].median()
-                elif selection == "mean":
-                    return filtered_data["value"].mean()
-                elif selection == "last":
-                    return filtered_data["value"].iloc[-1]
-                elif selection == "first":
-                    return filtered_data["value"].iloc[0]
+                try:
+                    # Convert values to numeric, coercing errors to NaN
+                    numeric_values = pd.to_numeric(filtered_data["value"], errors='coerce')
+                    
+                    if selection == "median":
+                        result = numeric_values.median()
+                    elif selection == "mean":
+                        result = numeric_values.mean()
+                    elif selection == "last":
+                        result = numeric_values.iloc[-1]
+                    elif selection == "first":
+                        result = numeric_values.iloc[0]
+                    else:
+                        result = numeric_values.median()
+                    
+                    # Return None if result is NaN, otherwise return the float value
+                    return None if pd.isna(result) else float(result)
+                    
+                except Exception:
+                    # If anything goes wrong, return None
+                    return None
     return None
 
 def create_lab_entry(date, selection="median"):

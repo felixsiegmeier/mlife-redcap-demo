@@ -142,21 +142,24 @@ class LabFormUI:
     def render_widget(self, config: dict, value: Any, index: int, field: str) -> None:
         """Render a Streamlit widget based on the config."""
         key = f'{index}_{field}'
+        
+        # Nur den Session State setzen wenn der Key noch nicht existiert
+        if key not in st.session_state:
+            if config["type"] == "selectbox":
+                current_value = value.value if hasattr(value, 'value') else value
+                st.session_state[key] = current_value
+            else:
+                st.session_state[key] = value
+        
         if config["type"] == "number":
-            st.session_state[key] = value
-            st.number_input(config["label"], value=value, step=config.get("step"), key=key, on_change=self.update_lab_field(index, field))
+            st.number_input(config["label"], step=config.get("step"), key=key, on_change=self.update_lab_field(index, field))
         elif config["type"] == "checkbox":
-            st.session_state[key] = value
-            st.checkbox(config["label"], value=value, key=key, on_change=self.update_lab_field(index, field))
+            st.checkbox(config["label"], key=key, on_change=self.update_lab_field(index, field))
         elif config["type"] == "selectbox":
             options = config["options"]
-            current_value = value.value if hasattr(value, 'value') else value
-            st.session_state[key] = current_value
-            sel_index = options.index(current_value)
-            st.selectbox(config["label"], options=options, index=sel_index, key=key, on_change=self.update_lab_field(index, field))
+            st.selectbox(config["label"], options=options, key=key, on_change=self.update_lab_field(index, field))
         elif config["type"] == "date":
-            st.session_state[key] = value
-            st.date_input(config["label"], value=value, key=key, on_change=self.update_lab_field(index, field))
+            st.date_input(config["label"], key=key, on_change=self.update_lab_field(index, field))
     
     def display_lab_entry(self, index: int) -> None:
         """Display the editable form for a single lab entry."""

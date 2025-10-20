@@ -10,4 +10,4 @@ class RespiratoryModel(BaseModel):
     value: Optional[float | str] = Field(None, description="Value of the measurement")
 
     class Config:
-        orm_mode = True
+        from_attributes = True
