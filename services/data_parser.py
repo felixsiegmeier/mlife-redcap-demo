@@ -181,7 +181,7 @@ class DataParser:
                     try:
                         value = float(clean_token)
                     except (ValueError, TypeError):
-                        continue
+                        value = clean_token
                         
                     # Get timestamp
                     try:

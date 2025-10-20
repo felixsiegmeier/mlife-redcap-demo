@@ -7,7 +7,7 @@ class VitalsModel(BaseModel):
     timestamp: datetime = Field(..., description="Timestamp of the measurement")
     category: Optional[str] = Field(None, description="Subcategory of the measurement")
     parameter: Optional[str] = Field(None, description="Parameter name")
-    value: Optional[float] = Field(None, description="Value of the measurement")
+    value: Optional[float | str] = Field(None, description="Value of the measurement")
 
     class Config:
         orm_mode = True

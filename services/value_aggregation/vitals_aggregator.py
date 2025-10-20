@@ -176,76 +176,32 @@ def _build_hemodynamics(record_date: date, selection: str) -> HemodynamicsModel:
 
 
 def _build_vasoactive_agents(record_date: date, selection: str) -> VasoactiveAgentsModel:
+    date = get_date_as_datetime(record_date)
+    
     return VasoactiveAgentsModel(
-        norepinephrine=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:NOREPINEPHRINE>", selection)
-        ),
-        epinephrine=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:EPINEPHRINE>", selection)
-        ),
-        dopamine=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:DOPAMINE>", selection)
-        ),
-        dobutamine=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:DOBUTAMINE>", selection)
-        ),
-        vasopressin=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:VASOPRESSIN>", selection)
-        ),
-        enoximone=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:ENOXIMONE>", selection)
-        ),
-        esmolol=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:ESMOLOL>", selection)
-        ),
-        levosimendan=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:LEVOSIMENDAN>", selection)
-        ),
-        metaraminol=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:METARAMINOL>", selection)
-        ),
-        metoprolol=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:METOPROLOL>", selection)
-        ),
-        milrinone=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:MILRINONE>", selection)
-        ),
-        nicardipine=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:NICARDIPINE>", selection)
-        ),
-        nitroglycerin=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:NITROGLYCERIN>", selection)
-        ),
-        nitroprusside=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:NITROPRUSSIDE>", selection)
-        ),
-        phenylephrine=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:PHENYLEPHRINE>", selection)
-        ),
-        tolazoline=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:TOLAZOLINE>", selection)
-        ),
-        empressin=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:EMPRESSIN>", selection)
-        ),
-        dobutamine_dose=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:DOBUTAMINE DOSE>", selection)
-        ),
-        epinephrine_dose=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:EPINEPHRINE DOSE>", selection)
-        ),
-        norepinephrine_dose=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:NOREPINEPHRINE DOSE>", selection)
-        ),
-        milrinone_dose=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:MILRINONE DOSE>", selection)
-        ),
-        vasopressin_dose=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:VASOPRESSIN DOSE>", selection)
-        ),
-        empressin_dose=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:VASOACTIVE>", "<TODO:EMPRESSIN DOSE>", selection)
-        ),
+        norepinephrine= not state_provider.get_vasoactive_agents_df(date, "Norepinephrin").empty,
+        epinephrine= not state_provider.get_vasoactive_agents_df(date, "Epinephrin").empty,
+        dopamine= not state_provider.get_vasoactive_agents_df(date, "Dopamin").empty,
+        dobutamine= not state_provider.get_vasoactive_agents_df(date, "Dobutamin").empty,
+        vasopressin= not state_provider.get_vasoactive_agents_df(date, "Vasopressin").empty,
+        enoximone= not state_provider.get_vasoactive_agents_df(date, "Enoximon").empty,
+        esmolol= not state_provider.get_vasoactive_agents_df(date, "Esmolol").empty,
+        levosimendan= not state_provider.get_vasoactive_agents_df(date, "Levosimendan").empty,
+        metaraminol= not state_provider.get_vasoactive_agents_df(date, "Metaraminol").empty,
+        metoprolol= not state_provider.get_vasoactive_agents_df(date, "Metoprolol").empty,
+        milrinone= not state_provider.get_vasoactive_agents_df(date, "Milrinon").empty,
+        nicardipine= not state_provider.get_vasoactive_agents_df(date, "Nicardipin").empty,
+        nitroglycerin= not state_provider.get_vasoactive_agents_df(date, "Nitroglycerin").empty,
+        nitroprusside= not state_provider.get_vasoactive_agents_df(date, "Nitroprussid").empty,
+        phenylephrine= not state_provider.get_vasoactive_agents_df(date, "Esmolol").empty,
+        tolazoline= not state_provider.get_vasoactive_agents_df(date, "Tolazolin").empty,
+        empressin= not state_provider.get_vasoactive_agents_df(date, "Empressin").empty,
+        dobutamine_dose= 0,
+        epinephrine_dose=0,
+        norepinephrine_dose=0,
+        milrinone_dose=0,
+        vasopressin_dose=0,
+        empressin_dose=0
     )
 
 

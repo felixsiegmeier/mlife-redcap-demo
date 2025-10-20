@@ -33,7 +33,7 @@ def parse_respiratory_data(clean_file, DELIMITER: str = ";") -> pd.DataFrame:
                 try:
                     value = float(tok)
                 except (ValueError, TypeError):
-                    continue
+                    value = tok
                 try:
                     ts_str = timestamps[i]
                 except (IndexError, TypeError):

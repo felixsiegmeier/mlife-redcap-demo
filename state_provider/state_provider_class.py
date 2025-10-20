@@ -210,4 +210,54 @@ class StateProvider:
 
         logger.warning("Unknown selection '%s' requested – falling back to median", selection)
         return float(filtered["value"].median())
+
+    def get_vasoactive_agents_df(self, date: datetime, agent: str) -> pd.DataFrame:
+        state = self.get_state()
+        if not state.parsed_data:
+            return pd.DataFrame()
+
+        medication_df = getattr(state.parsed_data, "medication", None)
+        if medication_df is None or medication_df.empty:
+            return pd.DataFrame()
+
+        filtered = medication_df[
+            ((medication_df["start"].dt.date == date) | (medication_df["stop"].dt.date == date))
+            & (medication_df["medication"].str.contains(agent, na=False))
+        ]
+
+        if filtered.empty:
+            return pd.DataFrame()
+
+        return filtered
+
+    def get_respiratory_value(self, date: datetime, parameter: str, selection: str = "median") -> Optional[float]:
+        state = self.get_state()
+        if not state.parsed_data:
+            return None
+        
+        respiratory_df = getattr(getattr(state, "parsed_data", None), "respiratory", None)
+        if respiratory_df is None or respiratory_df.empty or not parameter:
+            return None
+
+        filtered = respiratory_df[
+            (respiratory_df["timestamp"].dt.date == date)
+            & (respiratory_df["parameter"].str.contains(parameter, na=False))
+        ]
+
+        if filtered.empty:
+            return None
+
+        if selection == "median":
+            return float(filtered["value"].median())
+        if selection == "mean":
+            return float(filtered["value"].mean())
+        if selection == "last":
+            return float(filtered["value"].iloc[-1])
+        if selection == "first":
+            return float(filtered["value"].iloc[0])
+
+        logger.warning("Unknown selection '%s' requested – falling back to median", selection)
+        return float(filtered["value"].median())
+
+
 state_provider = StateProvider()
