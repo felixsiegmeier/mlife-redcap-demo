@@ -7,6 +7,7 @@ from typing import Iterable, Optional
 import pandas as pd
 
 from state_provider.state_provider import get_state
+from state_provider.state_provider_class import state_provider
 from schemas.db_schemas.vitals import (
     AntiPlateletAgent,
     AnticoagulationModel,
@@ -29,6 +30,7 @@ from schemas.db_schemas.vitals import (
     VentilationModel,
     VitalsModel,
 )
+from services.date_as_datetime import get_date_as_datetime
 
 DEFAULT_FLOAT = 0.0
 logger = logging.getLogger(__name__)
@@ -70,10 +72,11 @@ def get_vitals_value(
 
 
 def create_vitals_entry(record_date: date, selection: str = "median") -> VitalsModel:
-    """Create a fully-populated `VitalsModel` for the given date."""
+    date_as_datetime = get_date_as_datetime(record_date)
 
-    mcs_last_24h, ecls_and_impella_last_24h = _compute_mcs_flags(record_date)
-    day_of_mcs = _compute_day_of_mcs(record_date)
+    mcs_last_24h = state_provider.has_mcs_records_past_24h(date_as_datetime)
+    ecls_and_impella_last_24h = state_provider.has_device_past_24h("ecmo", date_as_datetime) and state_provider.has_device_past_24h("impella", date_as_datetime)
+    day_of_mcs = state_provider.get_time_of_mcs(date_as_datetime)
 
     date_as_datetime = (
         record_date
@@ -81,17 +84,17 @@ def create_vitals_entry(record_date: date, selection: str = "median") -> VitalsM
         else datetime.combine(record_date, datetime.min.time())
     )
 
-    nirs = _build_nirs(record_date, selection)
-    hemodynamics = _build_hemodynamics(record_date, selection)
-    vasoactive_agents = _build_vasoactive_agents(record_date, selection)
-    ventilation = _build_ventilation(record_date, selection)
-    neurology = _build_neurology(record_date, selection)
-    anticoagulation = _build_anticoagulation(record_date, selection)
-    antimicrobial_treatment = _build_antimicrobial_treatment(record_date, selection)
-    nutrition = _build_nutrition(record_date, selection)
-    transfusion = _build_transfusion(record_date, selection)
-    organ_support = _build_organ_support(record_date, selection)
-    kidney_function = _build_kidney_function(record_date, selection)
+    nirs = _build_nirs() # must be selected manually since naming of positions is inconsistent -> maybe possible with AI
+    #hemodynamics = _build_hemodynamics(record_date, selection)
+    #vasoactive_agents = _build_vasoactive_agents(record_date, selection)
+    #ventilation = _build_ventilation(record_date, selection)
+    #neurology = _build_neurology(record_date, selection)
+    #anticoagulation = _build_anticoagulation(record_date, selection)
+    #antimicrobial_treatment = _build_antimicrobial_treatment(record_date, selection)
+    #nutrition = _build_nutrition(record_date, selection)
+    #transfusion = _build_transfusion(record_date, selection)
+    #organ_support = _build_organ_support(record_date, selection)
+    #kidney_function = _build_kidney_function(record_date, selection)
 
     return VitalsModel(
         date=date_as_datetime,
@@ -114,21 +117,13 @@ def create_vitals_entry(record_date: date, selection: str = "median") -> VitalsM
     )
 
 
-def _build_nirs(record_date: date, selection: str) -> NirsModel:
+def _build_nirs() -> NirsModel:
     nirs_values = NirsValue(
-        cerebral_left=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:NIRS CATEGORY>", "<TODO:CEREBRAL LEFT>", selection)
-        ),
-        cerebral_right=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:NIRS CATEGORY>", "<TODO:CEREBRAL RIGHT>", selection)
-        ),
-        femoral_left=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:NIRS CATEGORY>", "<TODO:FEMORAL LEFT>", selection)
-        ),
-        femoral_right=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:NIRS CATEGORY>", "<TODO:FEMORAL RIGHT>", selection)
-        ),
-    )
+        cerebral_left= 0,
+        cerebral_right= 0,
+        femoral_left= 0,
+        femoral_right= 0,
+        )
 
     return NirsModel(
         location=[],  # TODO: derive actual locations once the source data is mapped

@@ -1,73 +1,60 @@
-import streamlit as st
-from schemas.app_state_schemas.app_state import AppState, ParsedData
-from datetime import datetime
+"""
+Backward-kompatible Wrapper für die StateProvider-Klasse.
+Diese Funktionen ermöglichen es bestehenden Code weiterhin zu funktionieren,
+während sie die neue StateProvider-Klasse verwenden.
+"""
+
 import pandas as pd
 from typing import Tuple
+from schemas.app_state_schemas.app_state import AppState
 
-# import parsers and helper
-from services.clean_csv import cleanCSV
-from services.parsers.parse_respiratory_data import parse_respiratory_data
-from services.parsers.parse_vitals_data import parse_vitals_data
-from services.parsers.parse_lab_data import parse_lab_data
-from services.parsers.parse_ecmo_data import parse_ecmo_data
-from services.parsers.parse_impella_data import parse_impella_data
-from services.parsers.parse_crrt_data import parse_crrt_data
-from services.parsers.parse_medication_data import parse_medication_data
-from services.parsers.parse_fluidbalance_data import parse_fluidbalance_data
-
+# Import der neuen StateProvider-Klasse und DataParser
+from .state_provider_class import state_provider
+from services.data_parser import DataParser
 
 
 def get_date_range_from_df(df: pd.DataFrame) -> Tuple:
-    try:
-        ts = pd.to_datetime(df['timestamp'], errors='coerce').dropna()
-        if ts.empty:
-            raise ValueError("Keine gültigen Timestamps gefunden")
-        start = ts.min().date()
-        end = ts.max().date()
-    except Exception:
-        start = datetime(2010, 1, 1).date()
-        end = datetime(datetime.now().year, 12, 31).date()
-    return (start, end)
+    """
+    Wrapper für DataParser.get_date_range_from_df
+    
+    Args:
+        df: DataFrame mit timestamp-Spalte
+        
+    Returns:
+        Tuple mit start- und end-Datum
+    """
+    return DataParser.get_date_range_from_df(df)
+
 
 def get_state() -> AppState:
-    if "app_state" not in st.session_state:
-        st.session_state.app_state = AppState()
-    return st.session_state.app_state
-
-
-def save_state(state: AppState):
-    st.session_state.app_state = state
+    """
+    Wrapper für StateProvider.get_state
     
+    Returns:
+        AppState-Objekt
+    """
+    return state_provider.get_state()
 
-def parse_data_to_state(file: str, DELIMITER: str = ";"):
-    state = get_state()
 
-    clean_file = cleanCSV(file)
+def save_state(state: AppState) -> None:
+    """
+    Wrapper für StateProvider.save_state
+    
+    Args:
+        state: Das zu speichernde AppState-Objekt
+    """
+    state_provider.save_state(state)
 
-    vitals = parse_vitals_data(clean_file, DELIMITER)
-    respiratory = parse_respiratory_data(clean_file, DELIMITER)
-    lab = parse_lab_data(clean_file, DELIMITER)
-    ecmo = parse_ecmo_data(clean_file, DELIMITER)
-    impella = parse_impella_data(clean_file, DELIMITER)
-    crrt = parse_crrt_data(clean_file, DELIMITER)
-    medication = parse_medication_data(clean_file, DELIMITER)
-    time_range = get_date_range_from_df(vitals)
-    fluidbalance = parse_fluidbalance_data(clean_file, DELIMITER)
 
-    state.parsed_data = ParsedData(
-        crrt=crrt,
-        ecmo=ecmo,
-        impella=impella,
-        lab=lab,
-        medication=medication,
-        respiratory=respiratory,
-        vitals=vitals,
-        fluidbalance=None #not yet implemented,
-    )
-
-    state.time_range = time_range
-    state.selected_time_range = time_range
-
-    state.last_updated = datetime.now()
-    save_state(state)
-    return state
+def parse_data_to_state(file: str, DELIMITER: str = ";") -> AppState:
+    """
+    Wrapper für StateProvider.parse_data_to_state
+    
+    Args:
+        file: Pfad zur Datei
+        DELIMITER: CSV-Delimiter (Standard: ";")
+        
+    Returns:
+        Aktualisierter AppState
+    """
+    return state_provider.parse_data_to_state(file, DELIMITER)

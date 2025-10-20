@@ -1,4 +1,4 @@
-from state_provider.state_provider import get_state, save_state, parse_data_to_state
+from state_provider.state_provider_class import state_provider
 from views.sidebar import render_sidebar
 from views.startpage import render_startpage
 from views.homepage import render_homepage
@@ -10,26 +10,25 @@ from datetime import datetime
 import streamlit as st
 
 def run_app():
-    state = get_state()
-   
-    if not state.selected_view == Views.STARTPAGE:
+
+    if not state_provider.get_selected_view() == Views.STARTPAGE:
         render_sidebar()
 
-    if state.selected_view == Views.STARTPAGE:
+    if state_provider.get_selected_view() == Views.STARTPAGE:
         render_startpage()
         with st.sidebar:
             st.header("Please upload a file")
 
-    elif state.selected_view == Views.HOMEPAGE:
+    elif state_provider.get_selected_view() == Views.HOMEPAGE:
         render_homepage()
-        
-    elif state.selected_view == Views.VITALS:
+
+    elif state_provider.get_selected_view() == Views.VITALS:
         render_vitals_data()
 
-    elif state.selected_view == Views.LAB:
+    elif state_provider.get_selected_view() == Views.LAB:
         render_lab_data()
 
-    elif state.selected_view == Views.LAB_FORM:
+    elif state_provider.get_selected_view() == Views.LAB_FORM:
         lab_form()
 
 if __name__ == "__main__":

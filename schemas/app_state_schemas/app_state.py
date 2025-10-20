@@ -27,6 +27,7 @@ class ParsedData(BaseModel):
     respiratory: Optional[pd.DataFrame] = None
     vitals: Optional[pd.DataFrame] = None
     fluidbalance: Optional[pd.DataFrame] = None
+    nirs: Optional[pd.DataFrame] = None
 
 class UiState(BaseModel):
     selected_categories : list[str] = []

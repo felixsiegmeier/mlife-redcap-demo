@@ -2,6 +2,8 @@ from state_provider.state_provider import get_state, save_state
 import streamlit as st
 import altair as alt
 
+# Still using old StateProvider functions 
+# -> Update to use new StateProvider methods in the future
 
 def render_lab_data():
     

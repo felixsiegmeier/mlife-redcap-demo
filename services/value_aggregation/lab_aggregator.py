@@ -1,4 +1,5 @@
 from state_provider.state_provider import get_state
+from state_provider.state_provider_class import StateProvider
 import pandas as pd
 from schemas.db_schemas.lab import LabModel, ArterialBloodGasModel, WithdrawalSite
 from datetime import datetime
