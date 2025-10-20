@@ -3,9 +3,12 @@ from schemas.app_state_schemas.app_state import AppState, ParsedData, Views
 from datetime import datetime, date, timedelta
 import pandas as pd
 from typing import Tuple, Optional
+import logging
 
 # Import der neuen DataParser Klasse
 from services.data_parser import DataParser
+
+logger = logging.getLogger(__name__)
 
 
 class StateProvider: 
@@ -179,5 +182,32 @@ class StateProvider:
         state.selected_time_range = (start_date, end_date)
         self.save_state(state)
 
+    def get_vitals_value(self, date: datetime, parameter: str, selection: str = "median") -> Optional[float]:
+        state = self.get_state()
+        if not state.parsed_data:
+            return None
+        
+        vitals_df = getattr(getattr(state, "parsed_data", None), "vitals", None)
+        if vitals_df is None or vitals_df.empty or not parameter:
+            return None
 
+        filtered = vitals_df[
+            (vitals_df["timestamp"].dt.date == date)
+            & (vitals_df["parameter"].str.contains(parameter, na=False))
+        ]
+
+        if filtered.empty:
+            return None
+
+        if selection == "median":
+            return float(filtered["value"].median())
+        if selection == "mean":
+            return float(filtered["value"].mean())
+        if selection == "last":
+            return float(filtered["value"].iloc[-1])
+        if selection == "first":
+            return float(filtered["value"].iloc[0])
+
+        logger.warning("Unknown selection '%s' requested – falling back to median", selection)
+        return float(filtered["value"].median())
 state_provider = StateProvider()

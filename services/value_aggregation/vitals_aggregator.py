@@ -38,7 +38,6 @@ logger = logging.getLogger(__name__)
 
 def get_vitals_value(
     record_date: date,
-    category: Optional[str] = None,
     parameter: Optional[str] = None,
     selection: str = "median",
 ) -> Optional[float]:
@@ -46,13 +45,12 @@ def get_vitals_value(
 
     state = get_state()
     vitals_df = getattr(getattr(state, "parsed_data", None), "vitals", None)
-    if vitals_df is None or vitals_df.empty or not category or not parameter:
+    if vitals_df is None or vitals_df.empty or not parameter:
         return None
 
     filtered = vitals_df[
         (vitals_df["timestamp"].dt.date == record_date)
-        & (vitals_df["category"] == category)
-        & (vitals_df["parameter"] == parameter)
+        & (vitals_df["parameter"].str.lower().contains(parameter.lower(), na=False))
     ]
 
     if filtered.empty:
@@ -85,7 +83,7 @@ def create_vitals_entry(record_date: date, selection: str = "median") -> VitalsM
     )
 
     nirs = _build_nirs() # must be selected manually since naming of positions is inconsistent -> maybe possible with AI
-    #hemodynamics = _build_hemodynamics(record_date, selection)
+    hemodynamics = _build_hemodynamics(record_date, selection)
     #vasoactive_agents = _build_vasoactive_agents(record_date, selection)
     #ventilation = _build_ventilation(record_date, selection)
     #neurology = _build_neurology(record_date, selection)
@@ -136,19 +134,19 @@ def _build_nirs() -> NirsModel:
 def _build_hemodynamics(record_date: date, selection: str) -> HemodynamicsModel:
     pac_candidates = {
         "pcwp": _normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:PCWP>", selection)
+            get_vitals_value(record_date,"PAWP", selection)
         ),
         "spap": _normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:SPAP>", selection)
+            get_vitals_value(record_date, "PAPs", selection)
         ),
         "dpap": _normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:DPAP>", selection)
+            get_vitals_value(record_date, "PAPd", selection)
         ),
         "mpap": _normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:MPAP>", selection)
+            get_vitals_value(record_date, "PAPm", selection)
         ),
         "ci": _normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:CI>", selection)
+            get_vitals_value(record_date, "CCI", selection)
         ),
     }
 
