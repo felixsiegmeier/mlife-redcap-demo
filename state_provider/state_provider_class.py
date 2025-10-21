@@ -200,7 +200,7 @@ class StateProvider:
             return None
 
         if selection == "median":
-            return float(filtered["value"].median())
+            return float(pd.to_numeric(filtered["value"], errors='coerce').median(skipna=True))
         if selection == "mean":
             return float(filtered["value"].mean())
         if selection == "last":
@@ -209,7 +209,7 @@ class StateProvider:
             return float(filtered["value"].iloc[0])
 
         logger.warning("Unknown selection '%s' requested – falling back to median", selection)
-        return float(filtered["value"].median())
+        return float(pd.to_numeric(filtered["value"], errors='coerce').median(skipna=True))
 
     def get_vasoactive_agents_df(self, date: datetime, agent: str) -> pd.DataFrame:
         state = self.get_state()
@@ -248,7 +248,7 @@ class StateProvider:
             return None
 
         if selection == "median":
-            return float(filtered["value"].median())
+            return float(pd.to_numeric(filtered["value"], errors='coerce').median(skipna=True))
         if selection == "mean":
             return float(filtered["value"].mean())
         if selection == "last":
@@ -257,7 +257,7 @@ class StateProvider:
             return float(filtered["value"].iloc[0])
 
         logger.warning("Unknown selection '%s' requested – falling back to median", selection)
-        return float(filtered["value"].median())
+        return float(pd.to_numeric(filtered["value"], errors='coerce').median(skipna=True))
 
 
 state_provider = StateProvider()

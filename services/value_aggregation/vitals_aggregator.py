@@ -57,7 +57,7 @@ def get_vitals_value(
         return None
 
     if selection == "median":
-        return float(filtered["value"].median())
+        return float(pd.to_numeric(filtered["value"], errors='coerce').median(skipna=True))
     if selection == "mean":
         return float(filtered["value"].mean())
     if selection == "last":
@@ -66,7 +66,7 @@ def get_vitals_value(
         return float(filtered["value"].iloc[0])
 
     logger.warning("Unknown selection '%s' requested – falling back to median", selection)
-    return float(filtered["value"].median())
+    return float(pd.to_numeric(filtered["value"], errors='coerce').median(skipna=True))
 
 
 def create_vitals_entry(record_date: date, selection: str = "median") -> VitalsModel:
@@ -84,7 +84,7 @@ def create_vitals_entry(record_date: date, selection: str = "median") -> VitalsM
 
     nirs = _build_nirs() # must be selected manually since naming of positions is inconsistent -> maybe possible with AI
     hemodynamics = _build_hemodynamics(record_date, selection)
-    #vasoactive_agents = _build_vasoactive_agents(record_date, selection)
+    vasoactive_agents = _build_vasoactive_agents(record_date, selection)
     #ventilation = _build_ventilation(record_date, selection)
     #neurology = _build_neurology(record_date, selection)
     #anticoagulation = _build_anticoagulation(record_date, selection)
@@ -206,34 +206,19 @@ def _build_vasoactive_agents(record_date: date, selection: str) -> VasoactiveAge
 
 
 def _build_ventilation(record_date: date, selection: str) -> VentilationModel:
+    date = get_date_as_datetime(record_date)
     return VentilationModel(
         ventilation_type=None,
-        o2=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:VENTILATION>", "<TODO:O2 FLOW>", selection)
-        ),
-        fio2=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:VENTILATION>", "<TODO:FIO2>", selection)
-        ),
+        o2=state_provider.get_respiratory_value(date, "FiO2", selection),
+        fio2=state_provider.get_respiratory_value(date, "FiO2", selection),
         ventilation_specifics=None,
         ventilation_mode=None,
-        hfo_ventilation_rate=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:VENTILATION>", "<TODO:HFO RATE>", selection)
-        ),
-        conventional_ventilation_rate=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:VENTILATION>", "<TODO:CONVENTIONAL RATE>", selection)
-        ),
-        mean_airway_pressure=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:VENTILATION>", "<TODO:MEAN AIRWAY PRESSURE>", selection)
-        ),
-        peak_inspiratory_pressure=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:VENTILATION>", "<TODO:PEAK INSPIRATORY PRESSURE>", selection)
-        ),
-        positive_end_expiratory_pressure=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:VENTILATION>", "<TODO:PEEP>", selection)
-        ),
-        prone_position=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:VENTILATION>", "<TODO:PRONE POSITION>", selection)
-        ),
+        hfo_ventilation_rate=state_provider.get_respiratory_value(date, "Spontanatemfrequenz", selection),
+        conventional_ventilation_rate=state_provider.get_respiratory_value(date, "Atemfrequenz", selection),
+        mean_airway_pressure=state_provider.get_respiratory_value(date, "FiO2", selection),
+        peak_inspiratory_pressure=state_provider.get_respiratory_value(date, "FiO2", selection),
+        positive_end_expiratory_pressure=state_provider.get_respiratory_value(date, "PEEP", selection),
+        prone_position=False
     )
 
 
