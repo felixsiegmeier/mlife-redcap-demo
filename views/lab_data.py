@@ -53,11 +53,11 @@ def render_lab_data():
             # Convert timestamp to date
             filtered = filtered.copy()
             filtered["date"] = filtered["timestamp"].dt.date
-            # Group by date, category, parameter and calculate mean of 'value'
+            # Group by date, category, parameter and calculate median of 'value', ignoring NaN
             filtered = (
                 filtered
                 .groupby(["date", "category", "parameter"], as_index=False)
-                .agg({"value": "median"})
+                .agg({"value": lambda x: x.median(skipna=True)})
             )
             # Rename 'date' column to 'timestamp' for consistency
             filtered = filtered.rename(columns={"date": "timestamp"})
