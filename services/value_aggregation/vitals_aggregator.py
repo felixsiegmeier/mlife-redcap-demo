@@ -208,7 +208,7 @@ def _build_vasoactive_agents(record_date: date, selection: str) -> VasoactiveAge
 def _build_ventilation(record_date: date, selection: str) -> VentilationModel:
     date = get_date_as_datetime(record_date)
     return VentilationModel(
-        ventilation_type=None,
+        ventilation_type : VentilationTyp =None,
         o2=state_provider.get_respiratory_value(date, "FiO2", selection),
         fio2=state_provider.get_respiratory_value(date, "FiO2", selection),
         ventilation_specifics=None,

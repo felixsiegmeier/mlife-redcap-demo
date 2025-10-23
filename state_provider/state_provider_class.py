@@ -2,11 +2,14 @@ import streamlit as st
 from schemas.app_state_schemas.app_state import AppState, ParsedData, Views
 from datetime import datetime, date, timedelta
 import pandas as pd
-from typing import Tuple, Optional
+from typing import Any, Callable, Dict, Optional, Tuple, Union
+from schemas.db_schemas.vitals import VentilationType
 import logging
 
 # Import der neuen DataParser Klasse
 from services.data_parser import DataParser
+from schemas.parse_schemas.vitals import VitalsModel
+from schemas.parse_schemas.lab import LabModel
 
 logger = logging.getLogger(__name__)
 
@@ -38,15 +41,23 @@ class StateProvider:
         parser = DataParser(file, delimiter)
         
         # Parse alle Datentypen mit dem DataParser
-        vitals = parser.parse_vitals_data()
+        vitals = parser._parse_table_data("Vitaldaten", VitalsModel)
         respiratory = parser.parse_respiratory_data()
-        lab = parser.parse_lab_data()
-        ecmo = parser.parse_ecmo_data()
-        impella = parser.parse_impella_data()
-        crrt = parser.parse_crrt_data()
-        medication = parser.parse_medication_data()
+        lab = parser._parse_table_data("Labor", LabModel, skip_first=True, clean_lab=True)
+        ecmo = parser.parse_data_from_all_patient_data('ECMO')
+        impella = parser.parse_data_from_all_patient_data('IMPELLA')
+        crrt = parser.parse_data_from_all_patient_data('HÄMOFILTER')
+        medication = parser.parse_special_data("Medication")
+        nirs = parser.parse_special_data("NIRS")
         time_range = parser.get_date_range_from_df(vitals)
-        fluidbalance = parser.parse_fluidbalance_data()
+        # Convert date tuple to datetime tuple
+        if time_range and time_range[0] and time_range[1]:
+            time_range_dt = (datetime.combine(time_range[0], datetime.min.time()), 
+                           datetime.combine(time_range[1], datetime.max.time()))
+        else:
+            time_range_dt = None
+        fluidbalance = parser.parse_special_data("Fluidbalance")
+        all_patient_data = parser.parse_all_patient_data()
         
         # Aktualisiere State mit geparsten Daten
         state.parsed_data = ParsedData(
@@ -57,11 +68,13 @@ class StateProvider:
             medication=medication,
             respiratory=respiratory,
             vitals=vitals,
-            fluidbalance=None  # not yet implemented
+            fluidbalance=fluidbalance,
+            nirs=nirs,
+            all_patient_data=all_patient_data
         )
         
-        state.time_range = time_range
-        state.selected_time_range = time_range
+        state.time_range = time_range_dt
+        state.selected_time_range = time_range_dt
         state.last_updated = datetime.now()
         
         self.save_state(state)
@@ -76,67 +89,176 @@ class StateProvider:
         return state.parsed_data is not None
 
     def get_device_time_ranges(self, device: str) -> Optional[pd.DataFrame]:
-        state = self.get_state()
-        if not state.parsed_data:
+        """Deprecated: Use query_data('devices', {'category': device}) and compute time ranges manually."""
+
+        device_df = self.query_data("devices", {"category": device})
+        if device_df.empty:
             return None
-            
-        device_data = getattr(state.parsed_data, device, None)
-        if device_data is None or device_data.empty:
-            return None
-        
+
         try:
-            df = device_data
-            categories = df['category'].dropna().unique().tolist()
-            
             time_ranges = []
-            for category in categories:
-                try:
-                    ts = df[df['category'] == category]['timestamp']
-                    ts = pd.to_datetime(ts, errors='coerce').dropna()
-                    if not ts.empty:
-                        start = ts.min().date()
-                        end = ts.max().date()
-                        time_ranges.append({
-                            'category': category,
-                            'start': start,
-                            'end': end
-                        })
-                except Exception:
+            for category in device_df.get("category", pd.Series(dtype=object)).dropna().unique():
+                cat_df = device_df[device_df["category"] == category]
+                if cat_df.empty or "timestamp" not in cat_df.columns:
                     continue
-            
-            if time_ranges:
-                return pd.DataFrame(time_ranges)
-            else:
-                return None
-                
+                timestamps = pd.to_datetime(cat_df["timestamp"], errors="coerce").dropna()
+                if timestamps.empty:
+                    continue
+                time_ranges.append(
+                    {
+                        "category": category,
+                        "start": timestamps.min().date(),
+                        "end": timestamps.max().date(),
+                    }
+                )
+            return pd.DataFrame(time_ranges) if time_ranges else None
         except Exception:
             return None
 
-    def has_device_past_24h(self, device: str, date: datetime) -> bool:
+    def query_data(self, data_source: str, filters: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
+        """Generalisierte Methode zum Abfragen von geparsten Daten mit Filtern und Aggregation."""
 
-        cutoff_time = date - timedelta(hours=24)
+        filters = filters or {}
         state = self.get_state()
+        if not state.parsed_data:
+            return pd.DataFrame()
 
-        device_df = getattr(state.parsed_data, device, None)
-        if device_df is not None and not device_df.empty:
-            ts = pd.to_datetime(device_df["timestamp"], errors="coerce").dropna()
-            if not ts.empty and (ts >= cutoff_time).any():
-                return True
+        df: Optional[pd.DataFrame] = None
 
-        return False
+        if data_source == "devices":
+            all_patient_data = getattr(state.parsed_data, "all_patient_data", {}) or {}
+            device_frames: list[pd.DataFrame] = []
+            for source_header, categories in all_patient_data.items():
+                if not isinstance(categories, dict):
+                    continue
+                for category, category_df in categories.items():
+                    if isinstance(category_df, pd.DataFrame) and not category_df.empty:
+                        current = category_df.copy()
+                        current["source_header"] = source_header
+                        current["category"] = category
+                        device_frames.append(current)
+            df = pd.concat(device_frames, ignore_index=True) if device_frames else pd.DataFrame()
+        elif hasattr(state.parsed_data, data_source):
+            candidate = getattr(state.parsed_data, data_source)
+            if isinstance(candidate, pd.DataFrame):
+                df = candidate
+            else:
+                df = pd.DataFrame()
+        else:
+            logger.warning("Unknown data source requested: %s", data_source)
+            return pd.DataFrame()
 
-    def has_mcs_records_past_24h(self, date: datetime) -> bool:
+        if df is None or df.empty:
+            return pd.DataFrame()
+
+        filtered_df = df.copy()
+
+        if "timestamp" in filtered_df.columns:
+            filtered_df["timestamp"] = pd.to_datetime(filtered_df["timestamp"], errors="coerce")
+
+        def _apply_filter(frame: pd.DataFrame, column: str, value: Any) -> pd.DataFrame:
+            if column not in frame.columns:
+                return frame
+            if isinstance(value, str):
+                return frame[frame[column].astype(str).str.contains(value, na=False, case=False)]
+            if isinstance(value, (list, tuple, set)):
+                return frame[frame[column].isin(list(value))]
+            return frame
+
+        timestamp_filter = filters.get("timestamp")
+        if timestamp_filter is not None and "timestamp" in filtered_df.columns:
+            if isinstance(timestamp_filter, datetime):
+                target_date = timestamp_filter.date()
+                filtered_df = filtered_df[filtered_df["timestamp"].dt.date == target_date]
+            elif (
+                isinstance(timestamp_filter, (list, tuple))
+                and len(timestamp_filter) == 2
+                and all(isinstance(item, datetime) for item in timestamp_filter)
+            ):
+                start, end = timestamp_filter
+                if start > end:
+                    start, end = end, start
+                filtered_df = filtered_df[
+                    (filtered_df["timestamp"] >= start) & (filtered_df["timestamp"] <= end)
+                ]
+
+        for key in ("parameter", "category", "source_header", "time_range"):
+            value = filters.get(key)
+            if value is not None:
+                filtered_df = _apply_filter(filtered_df, key, value)
+
+        limit = filters.get("limit")
+        if isinstance(limit, int) and limit >= 0:
+            filtered_df = filtered_df.head(limit)
+
+        selection = filters.get("selection")
+        if selection and not filtered_df.empty and "value" in filtered_df.columns:
+            group_cols = [col for col in ("parameter", "category") if col in filtered_df.columns]
+
+            def _aggregate_numeric(series: pd.Series, agg: str) -> float:
+                numeric = pd.to_numeric(series, errors="coerce").dropna()
+                if numeric.empty:
+                    return float("nan")
+                if agg == "median":
+                    return float(numeric.median())
+                if agg == "mean":
+                    return float(numeric.mean())
+                raise ValueError(f"Unsupported aggregation '{agg}'")
+
+            if selection in {"median", "mean"}:
+                if group_cols:
+                    aggregated = (
+                        filtered_df.groupby(group_cols)["value"]
+                        .apply(lambda s: _aggregate_numeric(s, selection))
+                        .reset_index(name="value")
+                    )
+                else:
+                    aggregated = pd.DataFrame(
+                        {"value": [_aggregate_numeric(filtered_df["value"], selection)]}
+                    )
+                return aggregated.reset_index(drop=True)
+
+            if selection in {"first", "last"}:
+                if "timestamp" in filtered_df.columns:
+                    filtered_df = filtered_df.sort_values("timestamp")
+                if group_cols:
+                    grouped = filtered_df.groupby(group_cols, as_index=False)
+                    result = grouped.first() if selection == "first" else grouped.last()
+                else:
+                    result = filtered_df.iloc[[0]] if selection == "first" else filtered_df.iloc[[-1]]
+                return result.reset_index(drop=True)
+
+            logger.warning("Unknown selection '%s' requested for %s", selection, data_source)
+
+        return filtered_df.reset_index(drop=True)
+
+    def has_device_past_24h(self, device: str, date: datetime) -> bool:
+        """Prüft, ob für das angegebene Device Daten in den letzten 24 Stunden vorliegen."""
+
         state = self.get_state()
         if not state.parsed_data:
             return False
-        
+
+        device_df = getattr(state.parsed_data, device, None)
+        if not isinstance(device_df, pd.DataFrame) or device_df.empty:
+            return False
+
+        if "timestamp" not in device_df.columns:
+            return False
+
+        cutoff_time = date - timedelta(hours=24)
+        timestamps = pd.to_datetime(device_df["timestamp"], errors="coerce").dropna()
+        if timestamps.empty:
+            return False
+
+        return bool((timestamps >= cutoff_time).any())
+
+    def has_mcs_records_past_24h(self, date: datetime) -> bool:
+        """Prüft, ob ECMO- oder Impella-Daten in den letzten 24 Stunden vorhanden sind."""
+
         for device in ("ecmo", "impella"):
-            try:
-                if self.has_device_past_24h(device, date):
-                    return True
-            except Exception:
-                continue
-                
+            if self.has_device_past_24h(device, date):
+                return True
         return False
 
     def get_time_range(self) -> Optional[Tuple]:
@@ -183,33 +305,14 @@ class StateProvider:
         self.save_state(state)
 
     def get_vitals_value(self, date: datetime, parameter: str, selection: str = "median") -> Optional[float]:
-        state = self.get_state()
-        if not state.parsed_data:
-            return None
-        
-        vitals_df = getattr(getattr(state, "parsed_data", None), "vitals", None)
-        if vitals_df is None or vitals_df.empty or not parameter:
-            return None
-
-        filtered = vitals_df[
-            (vitals_df["timestamp"].dt.date == date)
-            & (vitals_df["parameter"].str.contains(parameter, na=False))
-        ]
-
+        """Deprecated: Use query_data('vitals', {'timestamp': date, 'parameter': parameter, 'selection': selection}) instead."""
+        filtered = self.query_data('vitals', {'timestamp': date, 'parameter': parameter, 'selection': selection})
         if filtered.empty:
             return None
-
-        if selection == "median":
-            return float(pd.to_numeric(filtered["value"], errors='coerce').median(skipna=True))
-        if selection == "mean":
-            return float(filtered["value"].mean())
-        if selection == "last":
-            return float(filtered["value"].iloc[-1])
-        if selection == "first":
-            return float(filtered["value"].iloc[0])
-
-        logger.warning("Unknown selection '%s' requested – falling back to median", selection)
-        return float(pd.to_numeric(filtered["value"], errors='coerce').median(skipna=True))
+        # Assuming selection returns aggregated value
+        if 'value' in filtered.columns and not filtered.empty:
+            return float(filtered['value'].iloc[0])
+        return None
 
     def get_vasoactive_agents_df(self, date: datetime, agent: str) -> pd.DataFrame:
         state = self.get_state()
@@ -231,33 +334,16 @@ class StateProvider:
         return filtered
 
     def get_respiratory_value(self, date: datetime, parameter: str, selection: str = "median") -> Optional[float]:
-        state = self.get_state()
-        if not state.parsed_data:
-            return None
-        
-        respiratory_df = getattr(getattr(state, "parsed_data", None), "respiratory", None)
-        if respiratory_df is None or respiratory_df.empty or not parameter:
-            return None
-
-        filtered = respiratory_df[
-            (respiratory_df["timestamp"].dt.date == date)
-            & (respiratory_df["parameter"].str.contains(parameter, na=False))
-        ]
-
+        """Deprecated: Use query_data('respiratory', {'timestamp': date, 'parameter': parameter, 'selection': selection}) instead."""
+        filtered = self.query_data('respiratory', {'timestamp': date, 'parameter': parameter, 'selection': selection})
         if filtered.empty:
             return None
+        if 'value' in filtered.columns and not filtered.empty:
+            return float(filtered['value'].iloc[0])
+        return None
 
-        if selection == "median":
-            return float(pd.to_numeric(filtered["value"], errors='coerce').median(skipna=True))
-        if selection == "mean":
-            return float(filtered["value"].mean())
-        if selection == "last":
-            return float(filtered["value"].iloc[-1])
-        if selection == "first":
-            return float(filtered["value"].iloc[0])
-
-        logger.warning("Unknown selection '%s' requested – falling back to median", selection)
-        return float(pd.to_numeric(filtered["value"], errors='coerce').median(skipna=True))
-
+    def get_respiration_type(self, date: datetime) -> Optional[VentilationType]:
+        pass
+        # Hier weiter machen => evtl. anhand Vorhandensein Tubus, Beatmungseinstellungen (vorhandensein), HFNC-Vorhandensein
 
 state_provider = StateProvider()

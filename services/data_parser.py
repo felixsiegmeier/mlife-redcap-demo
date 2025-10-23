@@ -3,11 +3,17 @@ DataParser Klasse zur Konsolidierung aller Parser und Hilfsfunktionen.
 Diese Klasse akzeptiert eine Datei als Input und bietet alle verfügbaren Parser als eigene Methoden.
 """
 
-import pandas as pd
-import re
-from typing import Dict, Any, Tuple, Optional, List
-from datetime import datetime, date
+from __future__ import annotations
+
+import csv
 import logging
+import re
+from io import StringIO, TextIOBase
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
+import pandas as pd
+from datetime import datetime, date
 
 # Import nur der Schema-Definitionen
 from schemas.parse_schemas.vitals import VitalsModel
@@ -17,6 +23,7 @@ from schemas.parse_schemas.ecmo import EcmoModel
 from schemas.parse_schemas.impella import ImpellaModel
 from schemas.parse_schemas.crrt import CrrtModel
 from schemas.parse_schemas.medication import MedicationModel
+from schemas.parse_schemas.fluidbalance import FluidBalanceModel
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +31,14 @@ logger = logging.getLogger(__name__)
 class DataParser:
     """Einfache Klasse für alle Parsing-Operationen."""
     
-    def __init__(self, file: str, delimiter: str = ";"):
+    def __init__(self, file: Union[str, TextIOBase], delimiter: str = ";"):
         """Initialisiert den DataParser."""
-        self.raw_file = file
         self.delimiter = delimiter
-        self._clean_file = None
-        self._blocks = None
+        self._clean_file: Optional[str] = None
+        self._blocks: Optional[Dict[str, Dict[str, str]]] = None
+        self._raw_input = file
+        self._source_path: Optional[Path] = None
+        self.raw_file = self._read_input(file)
         
         self.headers = {
             "Vitaldaten": ['Online erfasste Vitaldaten', 'Manuell erfasste Vitaldaten'],
@@ -41,9 +50,47 @@ class DataParser:
                      'Labor: Elektrolyte', 'Labor: Blutzucker', 'Labor: Klinische Chemie',
                      'Labor: Medikamentenspiegel', 'Labor: Schilddrüse', 'Labor: Serologie/Infektion'],
             'Medikamentengaben': ["Medikamentengaben"],
+            'Bilanz': ["Bilanz"],
             'ALLE Patientendaten': ["ALLE Patientendaten"]
         }
+        
+        # Special parsers configuration
+        self.SPECIAL_PARSERS: Dict[str, Dict[str, Any]] = {
+            "nirs": {"parser": self._parse_nirs_logic},
+            "medication": {"parser": lambda: self.parse_combined_data("medication")},
+            "fluidbalance": {"parser": self._parse_fluidbalance_logic},
+        }
+        
+        # Combined data configuration (can be extended later on)
+        self.COMBINED_PARSERS: Dict[str, Dict[str, Any]] = {
+            "medication": {
+                "parser": self._parse_medication_logic,
+                "description": "Parst Medikamentengaben inklusive Start/Stop und Rate",
+            }
+        }
     
+    def _read_input(self, raw: Union[str, TextIOBase, bytes, bytearray]) -> str:
+        """Sorgt dafür, dass der Parser immer einen rohen CSV-String erhält."""
+        if isinstance(raw, TextIOBase):
+            contents = raw.read()
+            if hasattr(raw, "seek"):
+                raw.seek(0)
+            return contents
+
+        if isinstance(raw, (bytes, bytearray)):
+            return raw.decode("utf-8", errors="ignore")
+
+        if isinstance(raw, str):
+            if "\n" in raw:
+                return raw
+            potential_path = Path(raw)
+            if potential_path.exists() and potential_path.is_file():
+                self._source_path = potential_path
+                return potential_path.read_text(encoding="utf-8", errors="ignore")
+            return raw
+
+        raise TypeError("Unsupported input type for DataParser")
+
     def _clean_csv(self) -> str:
         """Bereinigt die CSV-Datei."""
         if self._clean_file is not None:
@@ -202,18 +249,221 @@ class DataParser:
                     ))
 
         return pd.DataFrame([item.__dict__ for item in data_list])
-    
-    def parse_vitals_data(self) -> pd.DataFrame:
-        """Parst Vitaldaten."""
-        return self._parse_table_data("Vitaldaten", VitalsModel)
+
+    def _parse_aditional_respiratory_data(self, data_class) -> pd.DataFrame:
+        hfnc_blocks = self._get_from_all_patient_data_by_string("High-Flow Nasen CPAP")
+        o2_data = self._get_from_all_patient_data_by_string("O2 Gabe")
+        print(hfnc_blocks)
+        return pd.DataFrame()
     
     def parse_respiratory_data(self) -> pd.DataFrame:
-        """Parst Respiratordaten."""
-        return self._parse_table_data("Respiratordaten", RespiratoryModel)
+        """
+        Parst Respiratordaten.
+        Kombiniert dabei verschiedene Quellen.
+        """
+        table_data = self._parse_table_data("Respiratordaten", RespiratoryModel)
+        mode_data = self._parse_aditional_respiratory_data(RespiratoryModel)
+        return pd.concat([table_data, mode_data], axis=0)
     
-    def parse_lab_data(self) -> pd.DataFrame:
-        """Parst Labordaten."""
-        return self._parse_table_data("Labor", LabModel, skip_first=True, clean_lab=True)
+    def parse_special_data(
+        self,
+        keyword: str,
+        parser_func: Optional[Callable[[], pd.DataFrame]] = None
+    ) -> pd.DataFrame:
+        """Generalisierte Methode zum Parsen spezieller Daten basierend auf Keywords."""
+        key_normalized = keyword.lower()
+
+        if parser_func is None:
+            parser_entry = self.SPECIAL_PARSERS.get(key_normalized)
+            if not parser_entry:
+                logger.warning("Unknown special data keyword: %s", keyword)
+                return pd.DataFrame()
+            parser_func = parser_entry.get("parser")
+
+        if parser_func is None:
+            logger.warning("No parser configured for keyword: %s", keyword)
+            return pd.DataFrame()
+
+        try:
+            result = parser_func()
+            if isinstance(result, pd.DataFrame):
+                return result
+            logger.warning("Parser for keyword %s did not return a DataFrame", keyword)
+            return pd.DataFrame()
+        except Exception as exc:
+            logger.error("Error parsing special data for keyword '%s': %s", keyword, exc)
+            return pd.DataFrame()
+
+    def parse_combined_data(self, keyword: str) -> pd.DataFrame:
+        """Generalisierte Methode zum Parsen kombinierter Daten (z. B. Medication)."""
+        config = self.COMBINED_PARSERS.get(keyword.lower())
+        if not config:
+            logger.warning("Unknown combined data keyword: %s", keyword)
+            return pd.DataFrame()
+
+        parser_func = config.get("parser")
+        if not callable(parser_func):
+            logger.error("Parser configuration for %s is invalid", keyword)
+            return pd.DataFrame()
+
+        try:
+            result = parser_func(config)
+        except TypeError:
+            # Backwards compatibility for parser functions without config argument
+            result = parser_func()  # type: ignore[misc]
+        except Exception as exc:
+            logger.error("Error parsing combined data for keyword '%s': %s", keyword, exc)
+            return pd.DataFrame()
+
+        if isinstance(result, pd.DataFrame):
+            return result
+
+        logger.warning("Combined parser for %s did not return a DataFrame", keyword)
+        return pd.DataFrame()
+    
+    def _parse_nirs_logic(self) -> pd.DataFrame:
+        """Parst NIRS-Daten anhand der generischen all_patient_data-Struktur."""
+        all_patient_data = self.parse_all_patient_data()
+        if not all_patient_data:
+            return pd.DataFrame()
+
+        candidate_headers = [
+            header for header in all_patient_data.keys()
+            if any(token in header.upper() for token in ("NIRS", "PSI", "ICP"))
+        ]
+
+        frames: List[pd.DataFrame] = []
+        for header in candidate_headers:
+            sub_blocks = all_patient_data.get(header, {})
+            for sub_header, df in sub_blocks.items():
+                if df is None or df.empty:
+                    continue
+                normalized = df.copy()
+                normalized["source_header"] = header
+                normalized["source_category"] = sub_header
+                normalized["category"] = "nirs"
+                frames.append(normalized)
+
+        if not frames:
+            return pd.DataFrame()
+
+        result = pd.concat(frames, ignore_index=True)
+        if "timestamp" in result.columns:
+            result["timestamp"] = pd.to_datetime(result["timestamp"], errors="coerce")
+            result = result.dropna(subset=["timestamp"])
+
+        return result.reset_index(drop=True)
+    
+    def _parse_medication_logic(self, config: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
+        """Parst Medikamentendaten."""
+        blocks = self._split_blocks()
+        med_text = blocks.get("Medikamentengaben", {}).get("Medikamentengaben", "")
+        
+        # Bereinige Text
+        clean_text = self._clean_medication_text(med_text)
+        lines = [line.split(self.delimiter) for line in clean_text.splitlines()]
+        
+        data_list = []
+        buffer = []
+        current_header = None
+        
+        for line in lines:
+            # Header = keine Timestamps
+            if not self._is_timestamp_row(line):
+                # Verarbeite vorherigen Block
+                if buffer and current_header:
+                    cols = self._get_medication_columns(current_header)
+                    if cols:
+                        data_list.extend(self._process_medication_block(buffer, cols, current_header))
+                # Neuer Header
+                current_header = line
+                buffer = []
+            else:
+                if current_header:
+                    buffer.append(line)
+        
+        # Letzter Block
+        if buffer and current_header:
+            cols = self._get_medication_columns(current_header)
+            if cols:
+                data_list.extend(self._process_medication_block(buffer, cols, current_header))
+        
+        return pd.DataFrame([item.__dict__ for item in data_list])
+    
+    def _parse_fluidbalance_logic(self) -> pd.DataFrame:
+        """Parst Flüssigkeitsbilanz-Daten auf Basis der Bilanz-Blöcke."""
+        blocks = self._split_blocks()
+        fluid_text = blocks.get("Bilanz", {}).get("Bilanz", "")
+
+        if not fluid_text:
+            return pd.DataFrame()
+
+        reader = list(csv.reader(StringIO(fluid_text), delimiter=self.delimiter))
+        if not reader:
+            return pd.DataFrame()
+
+        header_row = reader[0]
+        time_columns: Dict[int, str] = {}
+        for idx, cell in enumerate(header_row):
+            cleaned = cell.strip().strip('"')
+            if cleaned and cleaned.lower() != "flüssigkeitsbilanz":
+                time_columns[idx] = cleaned.replace("\n", " ")
+
+        entries: List[FluidBalanceModel] = []
+        current_category: Optional[str] = None
+
+        for row in reader[1:]:
+            label = row[3].strip() if len(row) > 3 else ""
+
+            if not label:
+                continue
+
+            if not label.startswith("("):
+                current_category = label
+                continue
+
+            parameter = label.strip("() ")
+            for col_idx, value_raw in enumerate(row):
+                if col_idx not in time_columns:
+                    continue
+                value_str = value_raw.strip().replace(" ", "")
+                if not value_str:
+                    continue
+                value_str = value_str.replace(",", ".")
+                try:
+                    value = float(value_str)
+                except ValueError:
+                    continue
+
+                time_label = time_columns[col_idx]
+                timestamp = self._time_range_to_timestamp(time_label)
+                entries.append(FluidBalanceModel(
+                    timestamp=timestamp,
+                    value=value,
+                    category=current_category or "unknown",
+                    parameter=parameter,
+                    time_range=time_label
+                ))
+
+        if not entries:
+            return pd.DataFrame()
+
+        return pd.DataFrame([item.dict() for item in entries])
+
+    def _time_range_to_timestamp(self, label: str) -> Optional[datetime]:
+        """Ermittelt einen repräsentativen Timestamp aus einem Zeitbereichs-Label."""
+        cleaned = label.strip().strip('"')
+        cleaned = cleaned.replace("\n", " ")
+        # Beispiel: "10.09.2025 11:00 - 15.09.2025 07:59 117 h"
+        match = re.search(r"(\d{2}\.\d{2}\.\d{4}\s*\d{2}:\d{2})\s*-\s*(\d{2}\.\d{2}\.\d{4}\s*\d{2}:\d{2})", cleaned)
+        if match:
+            start = self._parse_timestamp(match.group(1))
+            end = self._parse_timestamp(match.group(2))
+            if start and end:
+                return start + (end - start) / 2
+            return start or end
+
+        return self._parse_timestamp(cleaned)
     
     def _extract_all_patient_data_headers(self, data_str: str) -> set:
         """Input ist der String-Block 'ALLE Patientendaten'.
@@ -304,7 +554,6 @@ class DataParser:
         # Restlichen Buffer in das letzte Sub-Header schreiben
         if current_header is not None and current_sub_header is not None and buffer:
             result[current_header].setdefault(current_sub_header, []).extend(buffer)
-
         return result
     
     def _get_device_values(self, parts) -> Tuple[Optional[str], Optional[str]]:
@@ -366,66 +615,67 @@ class DataParser:
 
         return pd.DataFrame([item.__dict__ for item in data_list])
     
-    def parse_ecmo_data(self) -> pd.DataFrame:
-        """Parst ECMO-Daten."""
-        return self._parse_device_data("ECMO", EcmoModel, nested=False)
+    def parse_data_from_all_patient_data(self, keyword: str) -> pd.DataFrame:
+        """Parst Daten aus all_patient_data basierend auf Keyword."""
+        all_data = self.parse_all_patient_data()
+        matching_headers = [h for h in all_data.keys() if keyword.upper() in h.upper()]
+        dfs = []
+        for h in matching_headers:
+            dfs.extend(list(all_data[h].values()))
+        return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
     
-    def parse_impella_data(self) -> pd.DataFrame:
-        """Parst Impella-Daten."""
-        return self._parse_device_data("Impella", ImpellaModel, nested=True)
-    
-    def parse_crrt_data(self) -> pd.DataFrame:
-        """Parst CRRT-Daten."""
-        return self._parse_device_data("Hämofilter", CrrtModel, nested=True)
-    
-    def parse_nirs_data(self) -> pd.DataFrame:
-        """Parst NIRS-Daten (PSI/NIRS/ICP) als Vitaldaten."""
-        nirs_blocks = self._get_from_all_patient_data_by_string("PSI/NIRS/ICP")
-        data_list = []
-        
-        for key, nirs_dict in nirs_blocks.items():
-            for nirs_key, lines in nirs_dict.items():
-                current_timestamp = None
-                
+
+    def parse_all_patient_data(self) -> Dict[str, Dict[str, pd.DataFrame]]:
+        """Parst alle 'ALLE Patientendaten' in DataFrames gruppiert nach Headern und Sub-Headern."""
+        patient_data = self._split_blocks().get("ALLE Patientendaten", {})
+        if isinstance(patient_data, dict):
+            data_str = next(iter(patient_data.values()), "")
+        else:
+            data_str = patient_data
+
+        headers = self._extract_all_patient_data_headers(data_str)
+        result = {}
+
+        for header in headers:
+            # Sammle Blöcke pro Sub-Header
+            blocks = self._get_from_all_patient_data_by_string(header)
+            result[header] = {}
+            
+            for sub_header, lines in blocks.get(header, {}).items():
+                # Parse die Zeilen für diesen Sub-Header
+                data_list = []
+                timestamp = None
                 for line in lines:
                     parts = line.split(self.delimiter)
                     
-                    # Prüfe auf Timestamp-Zeile (Format: ;;;DD.MM.YYYY HH:MM;;...)
-                    if (len(parts) >= 4 and 
-                        parts[0] == "" and parts[1] == "" and parts[2] == "" and 
-                        parts[3].strip()):
-                        
-                        timestamp_str = parts[3].strip()
-                        if re.search(r"\d{2}\.\d{2}\.\d{4}\s*\d{2}:\d{2}", timestamp_str):
-                            current_timestamp = self._parse_timestamp(timestamp_str)
+                    if self._is_timestamp_row(parts):
+                        timestamp = self._find_timestamp(parts)
                         continue
-                    
-                    # Prüfe auf Datenzeile (Format: ;;;;Parameter;;;;;Wert;;;;...)
-                    if (len(parts) >= 10 and 
-                        parts[0] == "" and parts[1] == "" and parts[2] == "" and parts[3] == "" and
-                        parts[4].strip() and parts[9].strip()):  # Parameter und Wert vorhanden
                         
-                        if not current_timestamp:
-                            continue
-                            
-                        parameter = parts[4].strip()
-                        value_str = parts[9].strip()
+                    if not timestamp:
+                        continue
                         
-                        # Versuche Wert zu parsen
-                        try:
-                            value = float(value_str)
-                        except (ValueError, TypeError):
-                            continue
+                    parameter, value_str = self._get_device_values(parts)
+                    if not parameter or not value_str:
+                        continue
                         
-                        # Erstelle VitalsModel-Eintrag mit category "nirs"
-                        data_list.append(VitalsModel(
-                            timestamp=current_timestamp,
-                            value=value,
-                            category="nirs",
-                            parameter=parameter
-                        ))
+                    try:
+                        value = float(value_str.replace(",", "."))
+                    except ValueError:
+                        value = value_str
+                        
+                    data_list.append({
+                        'timestamp': timestamp,
+                        'value': value,
+                        'category': sub_header,
+                        'parameter': parameter,
+                        'source_header': header
+                    })
+                
+                if data_list:
+                    result[header][sub_header] = pd.DataFrame(data_list)
         
-        return pd.DataFrame([item.__dict__ for item in data_list])
+        return result
     
     def _clean_medication_text(self, text: str) -> str:
         """Bereinigt Medikamenten-Text."""
@@ -454,42 +704,7 @@ class DataParser:
         except ValueError:
             return None
 
-    def parse_medication_data(self) -> pd.DataFrame:
-        """Parst Medikamentendaten."""
-        blocks = self._split_blocks()
-        med_text = blocks.get("Medikamentengaben", {}).get("Medikamentengaben", "")
-        
-        # Bereinige Text
-        clean_text = self._clean_medication_text(med_text)
-        lines = [line.split(self.delimiter) for line in clean_text.splitlines()]
-        
-        data_list = []
-        buffer = []
-        current_header = None
-        
-        for line in lines:
-            # Header = keine Timestamps
-            if not self._is_timestamp_row(line):
-                # Verarbeite vorherigen Block
-                if buffer and current_header:
-                    cols = self._get_medication_columns(current_header)
-                    if cols:
-                        data_list.extend(self._process_medication_block(buffer, cols, current_header))
-                # Neuer Header
-                current_header = line
-                buffer = []
-            else:
-                if current_header:
-                    buffer.append(line)
-        
-        # Letzter Block
-        if buffer and current_header:
-            cols = self._get_medication_columns(current_header)
-            if cols:
-                data_list.extend(self._process_medication_block(buffer, cols, current_header))
-        
-        return pd.DataFrame([item.__dict__ for item in data_list])
-    
+
     def _process_medication_block(self, lines, cols, header) -> List[MedicationModel]:
         """Verarbeitet Medikamenten-Block."""
         result = []
@@ -518,27 +733,10 @@ class DataParser:
         
         return result
     
-    def parse_fluidbalance_data(self) -> pd.DataFrame:
-        """Parst Flüssigkeitsbilanz (noch nicht implementiert)."""
-        return pd.DataFrame()
-    
+
     def get_blocks(self) -> Dict[str, Dict[str, str]]:
         """Gibt alle Datenblöcke zurück."""
         return self._split_blocks()
-    
-    def parse_all_data(self) -> Dict[str, pd.DataFrame]:
-        """Parst alle Daten."""
-        return {
-            'vitals': self.parse_vitals_data(),
-            'respiratory': self.parse_respiratory_data(),
-            'lab': self.parse_lab_data(),
-            'ecmo': self.parse_ecmo_data(),
-            'impella': self.parse_impella_data(),
-            'crrt': self.parse_crrt_data(),
-            'medication': self.parse_medication_data(),
-            'fluidbalance': self.parse_fluidbalance_data(),
-            'nirs': self.parse_nirs_data()
-        }
     
     @staticmethod
     def get_date_range_from_df(df: pd.DataFrame) -> Tuple[Optional[date], Optional[date]]:

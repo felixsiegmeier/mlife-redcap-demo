@@ -1,6 +1,6 @@
 # state_model.py
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Dict
 from datetime import datetime
 from enum import Enum
 import pandas as pd
@@ -28,6 +28,7 @@ class ParsedData(BaseModel):
     vitals: Optional[pd.DataFrame] = None
     fluidbalance: Optional[pd.DataFrame] = None
     nirs: Optional[pd.DataFrame] = None
+    all_patient_data: Optional[Dict[str, Dict[str, pd.DataFrame]]] = None
 
 class UiState(BaseModel):
     selected_categories : list[str] = []
