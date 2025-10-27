@@ -1,6 +1,6 @@
 import pytest
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, time
 from state_provider.state_provider_class import StateProvider
 from schemas.app_state_schemas.app_state import ParsedData
 
@@ -70,9 +70,9 @@ def test_query_data_vitals_with_parameter_filter(provider_with_mock_data):
     assert all(result['parameter'] == 'HR')
 
 
-def test_query_data_vitals_with_selection_median(provider_with_mock_data):
+def test_query_data_vitals_with_value_strategy_median(provider_with_mock_data):
     """Test query_data für vitals mit Median-Aggregation."""
-    result = provider_with_mock_data.query_data('vitals', {'parameter': 'HR', 'selection': 'median'})
+    result = provider_with_mock_data.query_data('vitals', {'parameter': 'HR', 'value_strategy': 'median'})
     assert not result.empty
     assert 'value' in result.columns
     # Should have aggregated to one row per parameter/category
@@ -87,6 +87,18 @@ def test_query_data_lab(provider_with_mock_data):
     assert result['parameter'].iloc[0] == 'Creatinine'
 
 
+def test_query_data_vitals_with_value_strategy_nearest(provider_with_mock_data):
+    """Test query_data für vitals mit nearest-Aggregation (nächster Wert an 12:00)."""
+    # Mock-Daten haben timestamps um 12:00 und 13:00
+    # Anker bei 12:00 sollte den 12:00-Wert (80.0) zurückgeben
+    result = provider_with_mock_data.query_data('vitals', {'parameter': 'HR', 'value_strategy': {'nearest': time(12, 0)}})
+    assert not result.empty
+    assert 'value' in result.columns
+    # Sollte pro Tag/Parameter aggregiert sein
+    assert len(result) == 1  # Eine Gruppe: date + parameter
+    assert result['value'].iloc[0] == 80.0  # Der näheste an 12:00
+
+
 def test_query_data_empty_source(provider_with_mock_data):
     """Test query_data für nicht vorhandene Datenquelle."""
     result = provider_with_mock_data.query_data('nonexistent')
@@ -96,5 +108,6 @@ def test_query_data_empty_source(provider_with_mock_data):
 def test_query_data_no_parsed_data():
     """Test query_data ohne geparste Daten."""
     provider = StateProvider()
+    provider.reset_state()  # Ensure state is reset
     result = provider.query_data('vitals')
     assert result.empty

@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 def get_vitals_value(
     record_date: date,
     parameter: Optional[str] = None,
-    selection: str = "median",
+    value_strategy: str = "median",
 ) -> Optional[float]:
     """Return an aggregated vitals value for the given date/category/parameter."""
 
@@ -56,20 +56,20 @@ def get_vitals_value(
     if filtered.empty:
         return None
 
-    if selection == "median":
+    if value_strategy == "median":
         return float(pd.to_numeric(filtered["value"], errors='coerce').median(skipna=True))
-    if selection == "mean":
+    if value_strategy == "mean":
         return float(filtered["value"].mean())
-    if selection == "last":
+    if value_strategy == "last":
         return float(filtered["value"].iloc[-1])
-    if selection == "first":
+    if value_strategy == "first":
         return float(filtered["value"].iloc[0])
 
-    logger.warning("Unknown selection '%s' requested – falling back to median", selection)
+    logger.warning("Unknown value_strategy '%s' requested – falling back to median", value_strategy)
     return float(pd.to_numeric(filtered["value"], errors='coerce').median(skipna=True))
 
 
-def create_vitals_entry(record_date: date, selection: str = "median") -> VitalsModel:
+def create_vitals_entry(record_date: date, value_strategy: str = "median") -> VitalsModel:
     date_as_datetime = get_date_as_datetime(record_date)
 
     mcs_last_24h = state_provider.has_mcs_records_past_24h(date_as_datetime)
@@ -83,8 +83,8 @@ def create_vitals_entry(record_date: date, selection: str = "median") -> VitalsM
     )
 
     nirs = _build_nirs() # must be selected manually since naming of positions is inconsistent -> maybe possible with AI
-    hemodynamics = _build_hemodynamics(record_date, selection)
-    vasoactive_agents = _build_vasoactive_agents(record_date, selection)
+    hemodynamics = _build_hemodynamics(record_date, value_strategy)
+    vasoactive_agents = _build_vasoactive_agents(record_date, value_strategy)
     #ventilation = _build_ventilation(record_date, selection)
     #neurology = _build_neurology(record_date, selection)
     #anticoagulation = _build_anticoagulation(record_date, selection)
@@ -131,22 +131,22 @@ def _build_nirs() -> NirsModel:
     )
 
 
-def _build_hemodynamics(record_date: date, selection: str) -> HemodynamicsModel:
+def _build_hemodynamics(record_date: date, value_strategy: str) -> HemodynamicsModel:
     pac_candidates = {
         "pcwp": _normalize_optional_float(
-            get_vitals_value(record_date,"PAWP", selection)
+            get_vitals_value(record_date,"PAWP", value_strategy)
         ),
         "spap": _normalize_optional_float(
-            get_vitals_value(record_date, "PAPs", selection)
+            get_vitals_value(record_date, "PAPs", value_strategy)
         ),
         "dpap": _normalize_optional_float(
-            get_vitals_value(record_date, "PAPd", selection)
+            get_vitals_value(record_date, "PAPd", value_strategy)
         ),
         "mpap": _normalize_optional_float(
-            get_vitals_value(record_date, "PAPm", selection)
+            get_vitals_value(record_date, "PAPm", value_strategy)
         ),
         "ci": _normalize_optional_float(
-            get_vitals_value(record_date, "CCI", selection)
+            get_vitals_value(record_date, "CCI", value_strategy)
         ),
     }
 
@@ -154,28 +154,28 @@ def _build_hemodynamics(record_date: date, selection: str) -> HemodynamicsModel:
 
     return HemodynamicsModel(
         heart_rate=_ensure_float(
-            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:HEART RATE>", selection)
+            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:HEART RATE>", value_strategy)
         ),
         systolic_blood_pressure=_ensure_float(
-            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:SYSTOLIC BP>", selection)
+            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:SYSTOLIC BP>", value_strategy)
         ),
         diastolic_blood_pressure=_ensure_float(
-            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:DIASTOLIC BP>", selection)
+            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:DIASTOLIC BP>", value_strategy)
         ),
         mean_arterial_pressure=_ensure_float(
-            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:MEAN AP>", selection)
+            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:MEAN AP>", value_strategy)
         ),
         central_venous_pressure=_ensure_float(
-            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:CVP>", selection)
+            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:CVP>", value_strategy)
         ),
         spO2=_ensure_float(
-            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:SpO2>", selection)
+            get_vitals_value(record_date, "<TODO:HEMODYNAMICS>", "<TODO:SpO2>", value_strategy)
         ),
         pac=pac,
     )
 
 
-def _build_vasoactive_agents(record_date: date, selection: str) -> VasoactiveAgentsModel:
+def _build_vasoactive_agents(record_date: date, value_strategy: str) -> VasoactiveAgentsModel:
     date = get_date_as_datetime(record_date)
     
     return VasoactiveAgentsModel(
@@ -205,152 +205,152 @@ def _build_vasoactive_agents(record_date: date, selection: str) -> VasoactiveAge
     )
 
 
-def _build_ventilation(record_date: date, selection: str) -> VentilationModel:
+def _build_ventilation(record_date: date, value_strategy: str) -> VentilationModel:
     date = get_date_as_datetime(record_date)
     return VentilationModel(
         ventilation_type : VentilationTyp =None,
-        o2=state_provider.get_respiratory_value(date, "FiO2", selection),
-        fio2=state_provider.get_respiratory_value(date, "FiO2", selection),
+    o2=state_provider.get_respiratory_value(date, "FiO2", value_strategy),
+    fio2=state_provider.get_respiratory_value(date, "FiO2", value_strategy),
         ventilation_specifics=None,
         ventilation_mode=None,
-        hfo_ventilation_rate=state_provider.get_respiratory_value(date, "Spontanatemfrequenz", selection),
-        conventional_ventilation_rate=state_provider.get_respiratory_value(date, "Atemfrequenz", selection),
-        mean_airway_pressure=state_provider.get_respiratory_value(date, "FiO2", selection),
-        peak_inspiratory_pressure=state_provider.get_respiratory_value(date, "FiO2", selection),
-        positive_end_expiratory_pressure=state_provider.get_respiratory_value(date, "PEEP", selection),
+    hfo_ventilation_rate=state_provider.get_respiratory_value(date, "Spontanatemfrequenz", value_strategy),
+    conventional_ventilation_rate=state_provider.get_respiratory_value(date, "Atemfrequenz", value_strategy),
+    mean_airway_pressure=state_provider.get_respiratory_value(date, "FiO2", value_strategy),
+    peak_inspiratory_pressure=state_provider.get_respiratory_value(date, "FiO2", value_strategy),
+    positive_end_expiratory_pressure=state_provider.get_respiratory_value(date, "PEEP", value_strategy),
         prone_position=False
     )
 
 
-def _build_neurology(record_date: date, selection: str) -> NeurologyModel:
+def _build_neurology(record_date: date, value_strategy: str) -> NeurologyModel:
     return NeurologyModel(
         rass_score=_normalize_optional_int(
-            get_vitals_value(record_date, "<TODO:NEUROLOGY>", "<TODO:RASS>", selection)
+            get_vitals_value(record_date, "<TODO:NEUROLOGY>", "<TODO:RASS>", value_strategy)
         ),
         glasgow_coma_scale=_normalize_optional_int(
-            get_vitals_value(record_date, "<TODO:NEUROLOGY>", "<TODO:GCS>", selection)
+            get_vitals_value(record_date, "<TODO:NEUROLOGY>", "<TODO:GCS>", value_strategy)
         ),
         mobilization_level=None,
     )
 
 
-def _build_anticoagulation(record_date: date, selection: str) -> AnticoagulationModel:
+def _build_anticoagulation(record_date: date, value_strategy: str) -> AnticoagulationModel:
     return AnticoagulationModel(
         iv_anticoagulation=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:ANTICOAGULATION>", "<TODO:IV ANTICOAGULATION>", selection)
+            get_vitals_value(record_date, "<TODO:ANTICOAGULATION>", "<TODO:IV ANTICOAGULATION>", value_strategy)
         ),
         iv_anticoagulation_agent=None,
         anti_platelet_therapy=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:ANTICOAGULATION>", "<TODO:ANTI PLATELET THERAPY>", selection)
+            get_vitals_value(record_date, "<TODO:ANTICOAGULATION>", "<TODO:ANTI PLATELET THERAPY>", value_strategy)
         ),
         anti_platelet_agents=_normalize_enum_list(
             _value_to_iterable(
-                get_vitals_value(record_date, "<TODO:ANTICOAGULATION>", "<TODO:ANTI PLATELET AGENTS>", selection)
+                get_vitals_value(record_date, "<TODO:ANTICOAGULATION>", "<TODO:ANTI PLATELET AGENTS>", value_strategy)
             ),
             enum_cls=AntiPlateletAgent,
         ),
     )
 
 
-def _build_antimicrobial_treatment(record_date: date, selection: str) -> AntimicrobialTreatmentModel:
+def _build_antimicrobial_treatment(record_date: date, value_strategy: str) -> AntimicrobialTreatmentModel:
     return AntimicrobialTreatmentModel(
         antibiotic_antimycotic_treatment=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:ANTIMICROBIAL>", "<TODO:ANTIBIOTIC ANTIMYCOTIC>", selection)
+            get_vitals_value(record_date, "<TODO:ANTIMICROBIAL>", "<TODO:ANTIBIOTIC ANTIMYCOTIC>", value_strategy)
         ),
         specific_antibiotic_treatment=_normalize_enum_list(
             _value_to_iterable(
-                get_vitals_value(record_date, "<TODO:ANTIMICROBIAL>", "<TODO:SPECIFIC ANTIBIOTICS>", selection)
+                get_vitals_value(record_date, "<TODO:ANTIMICROBIAL>", "<TODO:SPECIFIC ANTIBIOTICS>", value_strategy)
             ),
             enum_cls=Antibiotic,
         ),
         antiviral_treatment=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:ANTIMICROBIAL>", "<TODO:ANTIVIRAL>", selection)
+            get_vitals_value(record_date, "<TODO:ANTIMICROBIAL>", "<TODO:ANTIVIRAL>", value_strategy)
         ),
         specific_antiviral_treatment=_normalize_optional_str(
-            get_vitals_value(record_date, "<TODO:ANTIMICROBIAL>", "<TODO:SPECIFIC ANTIVIRAL>", selection)
+            get_vitals_value(record_date, "<TODO:ANTIMICROBIAL>", "<TODO:SPECIFIC ANTIVIRAL>", value_strategy)
         ),
     )
 
 
-def _build_nutrition(record_date: date, selection: str) -> NutritionModel:
+def _build_nutrition(record_date: date, value_strategy: str) -> NutritionModel:
     return NutritionModel(
         nutrition_administered=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:NUTRITION>", "<TODO:NUTRITION ADMINISTERED>", selection)
+            get_vitals_value(record_date, "<TODO:NUTRITION>", "<TODO:NUTRITION ADMINISTERED>", value_strategy)
         ),
         specific_nutrition=_normalize_enum_list(
             _value_to_iterable(
-                get_vitals_value(record_date, "<TODO:NUTRITION>", "<TODO:SPECIFIC NUTRITION>", selection)
+                get_vitals_value(record_date, "<TODO:NUTRITION>", "<TODO:SPECIFIC NUTRITION>", value_strategy)
             ),
             enum_cls=NutritionType,
         ),
     )
 
 
-def _build_transfusion(record_date: date, selection: str) -> TransfusionModel:
+def _build_transfusion(record_date: date, value_strategy: str) -> TransfusionModel:
     return TransfusionModel(
         transfusion_required=_ensure_bool(
-            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:TRANSFUSION REQUIRED>", selection)
+            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:TRANSFUSION REQUIRED>", value_strategy)
         ),
         thrombocyte_transfusion=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:THROMBOCYTE>", selection)
+            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:THROMBOCYTE>", value_strategy)
         ),
         red_blood_cell_transfusion=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:RBC>", selection)
+            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:RBC>", value_strategy)
         ),
         fresh_frozen_plasma_transfusion=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:FFP>", selection)
+            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:FFP>", value_strategy)
         ),
         ppsb_administration=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:PPSB>", selection)
+            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:PPSB>", value_strategy)
         ),
         fibrinogen_administration=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:FIBRINOGEN>", selection)
+            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:FIBRINOGEN>", value_strategy)
         ),
         antithrombin_iii_administration=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:ATIII>", selection)
+            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:ATIII>", value_strategy)
         ),
         factor_xiii_administration=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:FACTOR XIII>", selection)
+            get_vitals_value(record_date, "<TODO:TRANSFUSION>", "<TODO:FACTOR XIII>", value_strategy)
         ),
     )
 
 
-def _build_organ_support(record_date: date, selection: str) -> OrganSupportModel:
+def _build_organ_support(record_date: date, value_strategy: str) -> OrganSupportModel:
     return OrganSupportModel(
         other_organ_support=_normalize_enum_list(
             _value_to_iterable(
-                get_vitals_value(record_date, "<TODO:ORGAN SUPPORT>", "<TODO:OTHER ORGAN SUPPORT>", selection)
+                get_vitals_value(record_date, "<TODO:ORGAN SUPPORT>", "<TODO:OTHER ORGAN SUPPORT>", value_strategy)
             ),
             enum_cls=OtherOrganSupport,
         ),
         medication=_normalize_enum_list(
             _value_to_iterable(
-                get_vitals_value(record_date, "<TODO:ORGAN SUPPORT>", "<TODO:MEDICATION>", selection)
+                get_vitals_value(record_date, "<TODO:ORGAN SUPPORT>", "<TODO:MEDICATION>", value_strategy)
             ),
             enum_cls=Medication,
         ),
         narcotics_sedative_agents=_normalize_enum_list(
             _value_to_iterable(
-                get_vitals_value(record_date, "<TODO:ORGAN SUPPORT>", "<TODO:NARCOTICS>", selection)
+                get_vitals_value(record_date, "<TODO:ORGAN SUPPORT>", "<TODO:NARCOTICS>", value_strategy)
             ),
             enum_cls=NarcoticsSedative,
         ),
     )
 
 
-def _build_kidney_function(record_date: date, selection: str) -> KidneyFunctionModel:
+def _build_kidney_function(record_date: date, value_strategy: str) -> KidneyFunctionModel:
     return KidneyFunctionModel(
         renal_replacement_therapy=None,
         total_urine_output=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:KIDNEY>", "<TODO:URINE OUTPUT>", selection)
+            get_vitals_value(record_date, "<TODO:KIDNEY>", "<TODO:URINE OUTPUT>", value_strategy)
         ),
         acute_kidney_injury=None,
         total_output_renal_replacement=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:KIDNEY>", "<TODO:RRT OUTPUT>", selection)
+            get_vitals_value(record_date, "<TODO:KIDNEY>", "<TODO:RRT OUTPUT>", value_strategy)
         ),
         fluid_balancing_type=None,
         fluid_balancing=_normalize_optional_float(
-            get_vitals_value(record_date, "<TODO:KIDNEY>", "<TODO:FLUID BALANCING>", selection)
+            get_vitals_value(record_date, "<TODO:KIDNEY>", "<TODO:FLUID BALANCING>", value_strategy)
         ),
     )
 

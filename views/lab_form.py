@@ -13,7 +13,7 @@ Program Flow:
    - Submit button (placeholder for RedCap integration)
 5. User interactions:
    - Changing the selectbox triggers show_update_hint(), setting a session_state flag to show an info message.
-   - Pressing the create/update button calls create_lab_form_with_selection(), which:
+    - Pressing the create/update button calls create_lab_form_with_value_strategy(), which:
      - Clears existing lab_form in state
      - Iterates over selected_time_range, creating lab entries via create_lab_entry()
      - Saves state
@@ -95,19 +95,19 @@ class LabFormUI:
     def __init__(self, state: Any) -> None:
         """Initialize with the application state."""
         self.state = state
-        self.selection = "median"
+        self.value_strategy = "median"
     
     def show_update_hint(self) -> None:
-        """Set a flag to show update hint when selection changes."""
+        """Set a flag to show update hint when value strategy changes."""
         st.session_state['show_update_hint'] = True
     
     def render_controls(self) -> None:
         """Render the controls for selecting lab value calculation and creating/updating forms."""
-        self.selection = st.selectbox("Value Calculation Method", options=["median", "mean", "last", "first"], index=0, key="selection_method", on_change=self.show_update_hint)
+        self.value_strategy = st.selectbox("Value Calculation Method", options=["median", "mean", "last", "first"], index=0, key="value_strategy_method", on_change=self.show_update_hint)
         if st.session_state.get('show_update_hint', False):
             st.info("Please press the 'Create/Update Lab Form for selected Time Range' button to apply the changes.")
         if st.button("Create/Update Lab Form for selected Time Range"):
-            create_lab_form_with_selection(self.selection)
+            create_lab_form_with_value_strategy(self.value_strategy)
             st.session_state['show_update_hint'] = False
             st.rerun()
 
@@ -198,7 +198,7 @@ class LabFormUI:
         self.render_entries()
         self.render_submit_button()
 
-def create_lab_form_with_selection(selection):
+def create_lab_form_with_value_strategy(value_strategy):
     state = get_state()
     state.lab_form = []
     if state.selected_time_range:
@@ -206,7 +206,7 @@ def create_lab_form_with_selection(selection):
         current_date = start_date
         while current_date <= end_date:
             date = current_date.date()
-            lab_entry = create_lab_entry(date, selection)
+            lab_entry = create_lab_entry(date, value_strategy)
             print(lab_entry)
             state.lab_form.append(lab_entry)
             current_date += pd.Timedelta(days=1)

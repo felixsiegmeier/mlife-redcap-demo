@@ -1,9 +1,9 @@
 import streamlit as st
 from schemas.app_state_schemas.app_state import AppState, ParsedData, Views
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time
 import pandas as pd
 from typing import Any, Callable, Dict, Optional, Tuple, Union
-from schemas.db_schemas.vitals import VentilationType
+# from schemas.db_schemas.vitals import VentilationType  # not yet defined in db schema
 import logging
 
 # Import der neuen DataParser Klasse
@@ -44,11 +44,11 @@ class StateProvider:
         vitals = parser._parse_table_data("Vitaldaten", VitalsModel)
         respiratory = parser.parse_respiratory_data()
         lab = parser._parse_table_data("Labor", LabModel, skip_first=True, clean_lab=True)
-        ecmo = parser.parse_data_from_all_patient_data('ECMO')
-        impella = parser.parse_data_from_all_patient_data('IMPELLA')
-        crrt = parser.parse_data_from_all_patient_data('HÄMOFILTER')
-        medication = parser.parse_special_data("Medication")
-        nirs = parser.parse_special_data("NIRS")
+        ecmo = parser.parse_from_all_patient_data('ECMO')
+        impella = parser.parse_from_all_patient_data('IMPELLA')
+        crrt = parser.parse_from_all_patient_data('HÄMOFILTER')
+        medication = parser.parse_medication_logic()
+        nirs = parser.parse_nirs_logic()
         time_range = parser.get_date_range_from_df(vitals)
         # Convert date tuple to datetime tuple
         if time_range and time_range[0] and time_range[1]:
@@ -56,7 +56,7 @@ class StateProvider:
                            datetime.combine(time_range[1], datetime.max.time()))
         else:
             time_range_dt = None
-        fluidbalance = parser.parse_special_data("Fluidbalance")
+        fluidbalance = parser.parse_fluidbalance_logic()
         all_patient_data = parser.parse_all_patient_data()
         
         # Aktualisiere State mit geparsten Daten
@@ -116,8 +116,41 @@ class StateProvider:
             return None
 
     def query_data(self, data_source: str, filters: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
-        """Generalisierte Methode zum Abfragen von geparsten Daten mit Filtern und Aggregation."""
+        """
+        Generalisierte Methode zum Abfragen von geparsten Daten mit Filtern und Aggregation.
 
+        Diese Methode ermöglicht das flexible Abfragen von geparsten medizinischen Daten aus verschiedenen Quellen.
+        Sie unterstützt sowohl vordefinierte Filter (wie timestamp, parameter, category) als auch beliebige
+        zusätzliche Spaltenfilter, um eine maximale Flexibilität zu gewährleisten, ohne die bestehende API zu brechen.
+
+        Parameter:
+        - data_source (str): Der Name der Datenquelle (z.B. "medication", "lab", "devices").
+    - filters (Optional[Dict[str, Any]]): Ein Dictionary mit Filtern. Bekannte Schlüssel:
+            * "timestamp": Einzelnes datetime-Objekt (für Datum) oder Liste/Tupel [start, end] für Zeitbereich.
+            * "parameter": Filter für die 'parameter'-Spalte (String oder Liste).
+            * "category": Filter für die 'category'-Spalte (String oder Liste).
+            * "source_header": Filter für die 'source_header'-Spalte (String oder Liste).
+            * "time_range": Filter für die 'time_range'-Spalte (String oder Liste).
+            * "limit": Integer, um die Anzahl der Ergebnisse zu begrenzen (z.B. 100 für die ersten 100 Zeilen).
+            * "value_strategy": Aggregation/Strategie ("median", "mean", "first", "last") für numerische Werte. Oder Dict für erweiterte Selektoren, z.B. {"nearest": time(12,0)} für den Wert am nächsten an 12:00 Uhr.
+            * Beliebige weitere Schlüssel werden als direkte Spaltenfilter behandelt (z.B. "medication": "Aspirin").
+
+        Rückgabewert:
+        - pd.DataFrame: Gefilterte und optional aggregierte Daten. Leerer DataFrame, wenn keine Daten vorhanden.
+
+        Beispiele:
+        - query_data("medication", {"parameter": "Aspirin"})  # Filtert nach Parameter
+        - query_data("lab", {"timestamp": [start_date, end_date]})  # Zeitbereich
+        - query_data("devices", {"medication": "Heparin", "limit": 50})  # Zusätzlicher Spaltenfilter + Limit
+    - query_data("vitals", {"parameter": "HR", "value_strategy": "median"})  # Aggregation
+    - query_data("vitals", {"parameter": "HR", "value_strategy": {"nearest": time(12,0)}})  # Wert am nächsten an 12:00
+
+        Hinweise:
+        - Filter werden sequentiell angewendet: Zuerst bekannte Filter, dann unbekannte Spaltenfilter, dann Limit, dann Aggregation.
+        - Bei unbekannten Spaltenfiltern wird die Spalte ignoriert, wenn sie nicht existiert.
+        - Aggregation erfordert eine 'value'-Spalte und funktioniert nur bei numerischen Werten.
+        - Diese Erweiterung ermöglicht z.B. direkte Filterung nach "medication" ohne Nachbearbeitung.
+        """
         filters = filters or {}
         state = self.get_state()
         if not state.parsed_data:
@@ -125,6 +158,7 @@ class StateProvider:
 
         df: Optional[pd.DataFrame] = None
 
+        # Datenquelle laden: Spezielle Behandlung für "devices" (kombiniert alle Patientendaten)
         if data_source == "devices":
             all_patient_data = getattr(state.parsed_data, "all_patient_data", {}) or {}
             device_frames: list[pd.DataFrame] = []
@@ -138,6 +172,7 @@ class StateProvider:
                         current["category"] = category
                         device_frames.append(current)
             df = pd.concat(device_frames, ignore_index=True) if device_frames else pd.DataFrame()
+        # Für andere Datenquellen: Direkt aus parsed_data holen
         elif hasattr(state.parsed_data, data_source):
             candidate = getattr(state.parsed_data, data_source)
             if isinstance(candidate, pd.DataFrame):
@@ -153,23 +188,37 @@ class StateProvider:
 
         filtered_df = df.copy()
 
+        # Timestamp-Spalte in datetime konvertieren, falls vorhanden
         if "timestamp" in filtered_df.columns:
             filtered_df["timestamp"] = pd.to_datetime(filtered_df["timestamp"], errors="coerce")
 
+        # Hilfsfunktion zum Anwenden von Filtern auf Spalten
         def _apply_filter(frame: pd.DataFrame, column: str, value: Any) -> pd.DataFrame:
             if column not in frame.columns:
-                return frame
+                return frame  # Spalte existiert nicht -> keine Filterung
             if isinstance(value, str):
+                # String-Filter: Case-insensitive Contains-Suche
                 return frame[frame[column].astype(str).str.contains(value, na=False, case=False)]
             if isinstance(value, (list, tuple, set)):
+                # Listen-Filter: Prüfen, ob Wert in der Liste ist
                 return frame[frame[column].isin(list(value))]
-            return frame
+            # Spezielle Behandlung für date-Objekte: Vergleiche mit datetime-Spalten über .dt.date
+            if isinstance(value, date) and not isinstance(value, datetime):
+                if pd.api.types.is_datetime64_any_dtype(frame[column]):
+                    return frame[frame[column].dt.date == value]
+                else:
+                    return frame[frame[column] == value]
+            # Andere Typen: Exakte Übereinstimmung (z.B. Zahlen, datetime)
+            return frame[frame[column] == value]
 
+        # 1. Timestamp-Filter anwenden (spezielle Logik für Datum oder Bereich)
         timestamp_filter = filters.get("timestamp")
         if timestamp_filter is not None and "timestamp" in filtered_df.columns:
             if isinstance(timestamp_filter, datetime):
                 target_date = timestamp_filter.date()
                 filtered_df = filtered_df[filtered_df["timestamp"].dt.date == target_date]
+            elif isinstance(timestamp_filter, date):
+                filtered_df = filtered_df[filtered_df["timestamp"].dt.date == timestamp_filter]
             elif (
                 isinstance(timestamp_filter, (list, tuple))
                 and len(timestamp_filter) == 2
@@ -177,24 +226,37 @@ class StateProvider:
             ):
                 start, end = timestamp_filter
                 if start > end:
-                    start, end = end, start
+                    start, end = end, start  # Sicherstellen, dass start <= end
                 filtered_df = filtered_df[
                     (filtered_df["timestamp"] >= start) & (filtered_df["timestamp"] <= end)
                 ]
 
+        # 2. Bekannte Filter anwenden (parameter, category, source_header, time_range)
         for key in ("parameter", "category", "source_header", "time_range"):
             value = filters.get(key)
             if value is not None:
                 filtered_df = _apply_filter(filtered_df, key, value)
 
+        # 3. Unbekannte Filter als direkte Spaltenfilter anwenden
+        # Bekannte Schlüssel, die bereits behandelt wurden oder später behandelt werden
+        known_keys = {"timestamp", "parameter", "category", "source_header", "time_range", "value_strategy", "limit"}
+        # Alle anderen Schlüssel in filters als Spaltenfilter interpretieren
+        for key, value in filters.items():
+            if key not in known_keys:
+                filtered_df = _apply_filter(filtered_df, key, value)
+
+        # 4. Limit anwenden, falls angegeben
         limit = filters.get("limit")
         if isinstance(limit, int) and limit >= 0:
             filtered_df = filtered_df.head(limit)
 
-        selection = filters.get("selection")
-        if selection and not filtered_df.empty and "value" in filtered_df.columns:
+        # 5. Aggregation (value_strategy) anwenden, falls angegeben
+        value_strategy = filters.get("value_strategy")
+        if value_strategy and not filtered_df.empty and "value" in filtered_df.columns:
+            # Gruppierungsspalten bestimmen (parameter und/oder category, falls vorhanden)
             group_cols = [col for col in ("parameter", "category") if col in filtered_df.columns]
 
+            # Hilfsfunktion für numerische Aggregation
             def _aggregate_numeric(series: pd.Series, agg: str) -> float:
                 numeric = pd.to_numeric(series, errors="coerce").dropna()
                 if numeric.empty:
@@ -205,31 +267,78 @@ class StateProvider:
                     return float(numeric.mean())
                 raise ValueError(f"Unsupported aggregation '{agg}'")
 
-            if selection in {"median", "mean"}:
+            # Median oder Mean: Numerische Aggregation
+            if isinstance(value_strategy, str) and value_strategy in {"median", "mean"}:
                 if group_cols:
                     aggregated = (
                         filtered_df.groupby(group_cols)["value"]
-                        .apply(lambda s: _aggregate_numeric(s, selection))
+                        .apply(lambda s: _aggregate_numeric(s, value_strategy))
                         .reset_index(name="value")
                     )
                 else:
                     aggregated = pd.DataFrame(
-                        {"value": [_aggregate_numeric(filtered_df["value"], selection)]}
+                        {"value": [_aggregate_numeric(filtered_df["value"], value_strategy)]}
                     )
                 return aggregated.reset_index(drop=True)
 
-            if selection in {"first", "last"}:
+            # First oder Last: Zeitbasierte Auswahl (sortiert nach timestamp)
+            if isinstance(value_strategy, str) and value_strategy in {"first", "last"}:
                 if "timestamp" in filtered_df.columns:
                     filtered_df = filtered_df.sort_values("timestamp")
                 if group_cols:
                     grouped = filtered_df.groupby(group_cols, as_index=False)
-                    result = grouped.first() if selection == "first" else grouped.last()
+                    result = grouped.first() if value_strategy == "first" else grouped.last()
                 else:
-                    result = filtered_df.iloc[[0]] if selection == "first" else filtered_df.iloc[[-1]]
+                    result = filtered_df.iloc[[0]] if value_strategy == "first" else filtered_df.iloc[[-1]]
                 return result.reset_index(drop=True)
 
-            logger.warning("Unknown selection '%s' requested for %s", selection, data_source)
+            # Nearest: Wert am nächsten an einem Anker-Zeitpunkt (z.B. 12:00 Uhr)
+            # Syntax: {"nearest": time(12, 0)}
+            # Gibt pro Tag und Gruppe den Wert mit minimaler Zeitdifferenz zum Anker zurück
+            if isinstance(value_strategy, dict) and "nearest" in value_strategy:
+                anchor_time = value_strategy["nearest"]
+                # Validiere Anker-Zeitpunkt
+                if not isinstance(anchor_time, time):
+                    logger.warning("Invalid anchor_time for nearest selection: expected time object, got %s", type(anchor_time))
+                    return filtered_df.reset_index(drop=True)
+                
+                # Stelle sicher, dass timestamp-Spalte vorhanden ist
+                if "timestamp" not in filtered_df.columns:
+                    logger.warning("Nearest selection requires 'timestamp' column in data")
+                    return filtered_df.reset_index(drop=True)
+                
+                # Temporäres DataFrame mit date-Spalte für tägliche Gruppierung
+                temp_df = filtered_df.copy()
+                temp_df["date"] = temp_df["timestamp"].dt.date
+                
+                # Da nearest pro Tag aggregiert, und gefilterte Daten nur einen Tag haben, direkt den nächsten Wert finden
+                def _find_nearest_value(df: pd.DataFrame) -> pd.Series:
+                    if df.empty:
+                        return pd.Series()  # Leere Series für empty case
+                    
+                    # Extrahiere Uhrzeiten und berechne Differenzen in Sekunden
+                    times = df["timestamp"].dt.time
+                    anchor_seconds = anchor_time.hour * 3600 + anchor_time.minute * 60 + anchor_time.second
+                    df_seconds = [t.hour * 3600 + t.minute * 60 + t.second for t in times]
+                    diffs = [abs(gs - anchor_seconds) for gs in df_seconds]
+                    
+                    # Index des minimalen Abstands
+                    min_idx = diffs.index(min(diffs))
+                    
+                    # Rückgabe der kompletten Zeile
+                    return df.iloc[min_idx]
+                
+                if temp_df.empty:
+                    aggregated = pd.DataFrame()
+                else:
+                    nearest_row = _find_nearest_value(temp_df)
+                    aggregated = pd.DataFrame([nearest_row])
+                
+                return aggregated
 
+            logger.warning("Unknown value_strategy '%s' requested for %s", value_strategy, data_source)
+
+        # Rückgabe des gefilterten DataFrames (ohne Aggregation)
         return filtered_df.reset_index(drop=True)
 
     def has_device_past_24h(self, device: str, date: datetime) -> bool:
@@ -304,9 +413,9 @@ class StateProvider:
         state.selected_time_range = (start_date, end_date)
         self.save_state(state)
 
-    def get_vitals_value(self, date: datetime, parameter: str, selection: str = "median") -> Optional[float]:
-        """Deprecated: Use query_data('vitals', {'timestamp': date, 'parameter': parameter, 'selection': selection}) instead."""
-        filtered = self.query_data('vitals', {'timestamp': date, 'parameter': parameter, 'selection': selection})
+    def get_vitals_value(self, date: datetime, parameter: str, value_strategy: str = "median") -> Optional[float]:
+        """Deprecated: Use query_data('vitals', {'timestamp': date, 'parameter': parameter, 'value_strategy': value_strategy}) instead."""
+        filtered = self.query_data('vitals', {'timestamp': date, 'parameter': parameter, 'value_strategy': value_strategy})
         if filtered.empty:
             return None
         # Assuming selection returns aggregated value
@@ -333,16 +442,16 @@ class StateProvider:
 
         return filtered
 
-    def get_respiratory_value(self, date: datetime, parameter: str, selection: str = "median") -> Optional[float]:
-        """Deprecated: Use query_data('respiratory', {'timestamp': date, 'parameter': parameter, 'selection': selection}) instead."""
-        filtered = self.query_data('respiratory', {'timestamp': date, 'parameter': parameter, 'selection': selection})
+    def get_respiratory_value(self, date: datetime, parameter: str, value_strategy: str = "median") -> Optional[float]:
+        """Deprecated: Use query_data('respiratory', {'timestamp': date, 'parameter': parameter, 'value_strategy': value_strategy}) instead."""
+        filtered = self.query_data('respiratory', {'timestamp': date, 'parameter': parameter, 'value_strategy': value_strategy})
         if filtered.empty:
             return None
         if 'value' in filtered.columns and not filtered.empty:
             return float(filtered['value'].iloc[0])
         return None
 
-    def get_respiration_type(self, date: datetime) -> Optional[VentilationType]:
+    def get_respiration_type(self, date: datetime) -> Optional[str]:
         pass
         # Hier weiter machen => evtl. anhand Vorhandensein Tubus, Beatmungseinstellungen (vorhandensein), HFNC-Vorhandensein
 

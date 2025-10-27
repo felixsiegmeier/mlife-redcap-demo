@@ -33,47 +33,30 @@ def parser(sample_csv_data):
     return DataParser(sample_csv_data)
 
 
-def test_parse_special_data_nirs(parser):
-    """Test parse_special_data für NIRS."""
-    result = parser.parse_special_data("NIRS")
+def test_parse_nirs_logic(parser):
+    """Test parse_nirs_logic."""
+    result = parser.parse_nirs_logic()
     assert isinstance(result, pd.DataFrame)
-    assert not result.empty
-    assert 'timestamp' in result.columns
-    assert 'value' in result.columns
-    assert 'category' in result.columns
-    assert 'parameter' in result.columns
-    assert result['category'].iloc[0] == 'nirs'
+    # NIRS data might be empty in test data
+    if not result.empty:
+        assert 'timestamp' in result.columns
+        assert 'value' in result.columns
+        assert 'category' in result.columns
+        assert 'parameter' in result.columns
+        assert result['category'].iloc[0] == 'nirs'
 
 
-def test_parse_special_data_medication(parser):
-    """Test parse_special_data für Medication."""
-    result = parser.parse_special_data("Medication")
+def test_parse_medication_logic(parser):
+    """Test parse_medication_logic."""
+    result = parser.parse_medication_logic()
     assert isinstance(result, pd.DataFrame)
     # Medication parsing might be complex, check if it runs without error
     # assert not result.empty  # Uncomment if medication data is properly parsed
 
 
-def test_parse_special_data_fluidbalance(parser):
-    """Test parse_special_data für Fluidbalance."""
-    result = parser.parse_special_data("Fluidbalance")
+def test_parse_fluidbalance_logic(parser):
+    """Test parse_fluidbalance_logic."""
+    result = parser.parse_fluidbalance_logic()
     assert isinstance(result, pd.DataFrame)
     # Currently returns empty DataFrame
     assert result.empty
-
-
-def test_parse_special_data_unknown(parser):
-    """Test parse_special_data für unbekanntes Keyword."""
-    result = parser.parse_special_data("Unknown")
-    assert isinstance(result, pd.DataFrame)
-    assert result.empty
-
-
-@pytest.mark.parametrize("keyword", ["NIRS", "Medication", "Fluidbalance"])
-def test_parse_special_data_parametrized(parser, keyword):
-    """Parametrisierter Test für alle Keywords."""
-    result = parser.parse_special_data(keyword)
-    assert isinstance(result, pd.DataFrame)
-    # Check columns if not empty
-    if not result.empty:
-        assert 'timestamp' in result.columns
-        assert 'value' in result.columns

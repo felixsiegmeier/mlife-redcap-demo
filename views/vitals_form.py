@@ -140,20 +140,20 @@ class VitalsFormUI:
     
     def __init__(self, state: Any) -> None:
         """Initialize with the application state."""
-        self.state = state
-        self.selection = "median"
+    self.state = state
+    self.value_strategy = "median"
     
     def show_update_hint(self) -> None:
-        """Set a flag to show update hint when selection changes."""
+        """Set a flag to show update hint when value strategy changes."""
         st.session_state['show_update_hint'] = True
     
     def render_controls(self) -> None:
         """Render the controls for selecting vitals value calculation and creating/updating forms."""
-        self.selection = st.selectbox("Value Calculation Method", options=["median", "mean", "last", "first"], index=0, key="selection_method", on_change=self.show_update_hint)
+        self.value_strategy = st.selectbox("Value Calculation Method", options=["median", "mean", "last", "first"], index=0, key="value_strategy_method", on_change=self.show_update_hint)
         if st.session_state.get('show_update_hint', False):
             st.info("Please press the 'Create/Update Vitals Form for selected Time Range' button to apply the changes.")
         if st.button("Create/Update Vitals Form for selected Time Range"):
-            create_vitals_form_with_selection(self.selection)
+            create_vitals_form_with_value_strategy(self.value_strategy)
             st.session_state['show_update_hint'] = False
             st.rerun()
 
@@ -281,7 +281,7 @@ class VitalsFormUI:
         self.render_entries()
         self.render_submit_button()
 
-def create_vitals_form_with_selection(selection):
+def create_vitals_form_with_value_strategy(value_strategy):
     state = get_state()
     state.vitals_form = []
     if state.selected_time_range:
@@ -289,7 +289,7 @@ def create_vitals_form_with_selection(selection):
         current_date = start_date
         while current_date <= end_date:
             date = current_date.date()
-            vitals_entry = create_vitals_entry(date, selection)
+            vitals_entry = create_vitals_entry(date, value_strategy)
             state.vitals_form.append(vitals_entry)
             current_date += pd.Timedelta(days=1)
     save_state(state)

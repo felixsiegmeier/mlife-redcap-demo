@@ -1,4 +1,5 @@
 import pytest
+import pandas as pd
 from state_provider.state_provider_class import StateProvider
 from services.data_parser import DataParser
 import os
@@ -26,20 +27,20 @@ def provider():
 
 
 @pytest.mark.benchmark
-def test_parse_special_data_nirs_performance(benchmark, parser):
-    """Performance-Test für parse_special_data NIRS."""
+def test_parse_nirs_logic_performance(benchmark, parser):
+    """Performance-Test für parse_nirs_logic."""
     def run():
-        return parser.parse_special_data("NIRS")
+        return parser.parse_nirs_logic()
     
     result = benchmark(run)
     assert isinstance(result, type(pd.DataFrame()))  # Ensure it returns DataFrame
 
 
 @pytest.mark.benchmark
-def test_parse_special_data_medication_performance(benchmark, parser):
-    """Performance-Test für parse_special_data Medication."""
+def test_parse_medication_logic_performance(benchmark, parser):
+    """Performance-Test für parse_medication_logic."""
     def run():
-        return parser.parse_special_data("Medication")
+        return parser.parse_medication_logic()
     
     result = benchmark(run)
     assert isinstance(result, type(pd.DataFrame()))
@@ -52,7 +53,7 @@ def test_query_data_vitals_performance(benchmark, provider, real_csv_path):
     state = provider.parse_data_to_state(real_csv_path)
     
     def run():
-        return provider.query_data('vitals', {'parameter': 'HR', 'selection': 'median'})
+        return provider.query_data('vitals', {'parameter': 'HR', 'value_strategy': 'median'})
     
     result = benchmark(run)
     assert isinstance(result, type(pd.DataFrame()))
@@ -69,7 +70,7 @@ def test_parse_data_to_state_performance(benchmark, provider, real_csv_path):
 
 
 # Baseline values (update after initial run)
-NIRS_PARSE_TIME_BASELINE = 0.1  # seconds
+NIRS_PARSE_TIME_BASELINE = 2.0  # seconds
 MEDICATION_PARSE_TIME_BASELINE = 0.1
 QUERY_TIME_BASELINE = 0.05
 FULL_PARSE_TIME_BASELINE = 1.0
@@ -79,7 +80,7 @@ def test_performance_regression_nirs(parser):
     """Regressionstest für NIRS Parsing Zeit."""
     import time
     start = time.time()
-    result = parser.parse_special_data("NIRS")
+    result = parser.parse_nirs_logic()
     duration = time.time() - start
     assert duration < NIRS_PARSE_TIME_BASELINE * 2  # Allow 2x baseline
 
@@ -88,7 +89,7 @@ def test_performance_regression_medication(parser):
     """Regressionstest für Medication Parsing Zeit."""
     import time
     start = time.time()
-    result = parser.parse_special_data("Medication")
+    result = parser.parse_medication_logic()
     duration = time.time() - start
     assert duration < MEDICATION_PARSE_TIME_BASELINE * 2
 

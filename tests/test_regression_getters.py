@@ -53,7 +53,7 @@ def test_get_vitals_value_median(provider_with_mock_data):
     old_result = provider_with_mock_data.get_vitals_value(date, 'HR', 'median')
     
     # New method
-    new_result_df = provider_with_mock_data.query_data('vitals', {'timestamp': date, 'parameter': 'HR', 'selection': 'median'})
+    new_result_df = provider_with_mock_data.query_data('vitals', {'timestamp': date, 'parameter': 'HR', 'value_strategy': 'median'})
     new_result = new_result_df['value'].iloc[0] if not new_result_df.empty else None
     
     assert old_result == new_result == 82.5
@@ -64,7 +64,7 @@ def test_get_vitals_value_mean(provider_with_mock_data):
     date = datetime(2023, 1, 1)
     
     old_result = provider_with_mock_data.get_vitals_value(date, 'HR', 'mean')
-    new_result_df = provider_with_mock_data.query_data('vitals', {'timestamp': date, 'parameter': 'HR', 'selection': 'mean'})
+    new_result_df = provider_with_mock_data.query_data('vitals', {'timestamp': date, 'parameter': 'HR', 'value_strategy': 'mean'})
     new_result = new_result_df['value'].iloc[0] if not new_result_df.empty else None
     
     expected = (80.0 + 85.0) / 2  # 82.5
@@ -76,7 +76,7 @@ def test_get_vitals_value_last(provider_with_mock_data):
     date = datetime(2023, 1, 1)
     
     old_result = provider_with_mock_data.get_vitals_value(date, 'HR', 'last')
-    new_result_df = provider_with_mock_data.query_data('vitals', {'timestamp': date, 'parameter': 'HR', 'selection': 'last'})
+    new_result_df = provider_with_mock_data.query_data('vitals', {'timestamp': date, 'parameter': 'HR', 'value_strategy': 'last'})
     new_result = new_result_df['value'].iloc[0] if not new_result_df.empty else None
     
     assert old_result == new_result == 85.0
@@ -87,7 +87,7 @@ def test_get_respiratory_value_median(provider_with_mock_data):
     date = datetime(2023, 1, 1)
     
     old_result = provider_with_mock_data.get_respiratory_value(date, 'RR', 'median')
-    new_result_df = provider_with_mock_data.query_data('respiratory', {'timestamp': date, 'parameter': 'RR', 'selection': 'median'})
+    new_result_df = provider_with_mock_data.query_data('respiratory', {'timestamp': date, 'parameter': 'RR', 'value_strategy': 'median'})
     new_result = new_result_df['value'].iloc[0] if not new_result_df.empty else None
     
     expected = (20.0 + 22.0) / 2  # 21.0
@@ -99,7 +99,7 @@ def test_get_vitals_value_no_data(provider_with_mock_data):
     date = datetime(2023, 1, 2)  # Different date
     
     old_result = provider_with_mock_data.get_vitals_value(date, 'HR')
-    new_result_df = provider_with_mock_data.query_data('vitals', {'timestamp': date, 'parameter': 'HR', 'selection': 'median'})
+    new_result_df = provider_with_mock_data.query_data('vitals', {'timestamp': date, 'parameter': 'HR', 'value_strategy': 'median'})
     new_result = None if new_result_df.empty else new_result_df['value'].iloc[0]
     
     assert old_result == new_result == None

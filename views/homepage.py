@@ -1,10 +1,10 @@
 import streamlit as st
-from state_provider.state_provider import get_state
+from state_provider.state_provider_class import state_provider
 from datetime import datetime
 import pandas as pd
 
 def render_ecmo_time_ranges():
-    state = get_state()
+    state = state_provider.get_state()
     try:
         df = state.parsed_data.ecmo
         ecmos = df['category'].dropna().unique().tolist()
@@ -24,7 +24,7 @@ def render_ecmo_time_ranges():
         return
     
 def render_impella_time_ranges():
-    state = get_state()
+    state = state_provider.get_state()
     try:
         df = state.parsed_data.impella
         impellas = df['category'].dropna().unique().tolist()
@@ -44,7 +44,7 @@ def render_impella_time_ranges():
         return
 
 def render_crrt_time_ranges():
-    state = get_state()
+    state = state_provider.get_state()
     try:
         df = state.parsed_data.crrt
         crrts = df['category'].dropna().unique().tolist()
@@ -66,7 +66,7 @@ def render_crrt_time_ranges():
 
 def render_homepage():
     st.header("Overview")
-    state = get_state()
+    state = state_provider.get_state()
     
     parsed = getattr(state, "parsed_data", None)
     if not parsed:
