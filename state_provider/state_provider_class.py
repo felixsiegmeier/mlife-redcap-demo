@@ -132,7 +132,8 @@ class StateProvider:
             * "source_header": Filter für die 'source_header'-Spalte (String oder Liste).
             * "time_range": Filter für die 'time_range'-Spalte (String oder Liste).
             * "limit": Integer, um die Anzahl der Ergebnisse zu begrenzen (z.B. 100 für die ersten 100 Zeilen).
-            * "value_strategy": Aggregation/Strategie ("median", "mean", "first", "last") für numerische Werte. Oder Dict für erweiterte Selektoren, z.B. {"nearest": time(12,0)} für den Wert am nächsten an 12:00 Uhr.
+            * "value_strategy": Aggregation/Strategie ("median", "mean", "first", "last", "nearest") für numerische Werte.
+            * "nearest_time": datetime.time-Objekt, das nur bei value_strategy="nearest" verwendet wird, um den Wert am nächsten an dieser Zeit zu finden.
             * Beliebige weitere Schlüssel werden als direkte Spaltenfilter behandelt (z.B. "medication": "Aspirin").
 
         Rückgabewert:
@@ -142,10 +143,8 @@ class StateProvider:
         - query_data("medication", {"parameter": "Aspirin"})  # Filtert nach Parameter
         - query_data("lab", {"timestamp": [start_date, end_date]})  # Zeitbereich
         - query_data("devices", {"medication": "Heparin", "limit": 50})  # Zusätzlicher Spaltenfilter + Limit
-    - query_data("vitals", {"parameter": "HR", "value_strategy": "median"})  # Aggregation
-    - query_data("vitals", {"parameter": "HR", "value_strategy": {"nearest": time(12,0)}})  # Wert am nächsten an 12:00
-
-        Hinweise:
+        - query_data("vitals", {"parameter": "HR", "value_strategy": "median"})  # Aggregation
+        - query_data("vitals", {"parameter": "HR", "value_strategy": "nearest", "nearest_time": time(12,0)})  # Wert am nächsten an 12:00        Hinweise:
         - Filter werden sequentiell angewendet: Zuerst bekannte Filter, dann unbekannte Spaltenfilter, dann Limit, dann Aggregation.
         - Bei unbekannten Spaltenfiltern wird die Spalte ignoriert, wenn sie nicht existiert.
         - Aggregation erfordert eine 'value'-Spalte und funktioniert nur bei numerischen Werten.
@@ -239,7 +238,7 @@ class StateProvider:
 
         # 3. Unbekannte Filter als direkte Spaltenfilter anwenden
         # Bekannte Schlüssel, die bereits behandelt wurden oder später behandelt werden
-        known_keys = {"timestamp", "parameter", "category", "source_header", "time_range", "value_strategy", "limit"}
+        known_keys = {"timestamp", "parameter", "category", "source_header", "time_range", "value_strategy", "nearest_time", "limit"}
         # Alle anderen Schlüssel in filters als Spaltenfilter interpretieren
         for key, value in filters.items():
             if key not in known_keys:
@@ -292,14 +291,11 @@ class StateProvider:
                     result = filtered_df.iloc[[0]] if value_strategy == "first" else filtered_df.iloc[[-1]]
                 return result.reset_index(drop=True)
 
-            # Nearest: Wert am nächsten an einem Anker-Zeitpunkt (z.B. 12:00 Uhr)
-            # Syntax: {"nearest": time(12, 0)}
-            # Gibt pro Tag und Gruppe den Wert mit minimaler Zeitdifferenz zum Anker zurück
-            if isinstance(value_strategy, dict) and "nearest" in value_strategy:
-                anchor_time = value_strategy["nearest"]
-                # Validiere Anker-Zeitpunkt
-                if not isinstance(anchor_time, time):
-                    logger.warning("Invalid anchor_time for nearest selection: expected time object, got %s", type(anchor_time))
+            # Nearest: Wert am nächsten an einem Anker-Zeitpunkt
+            if isinstance(value_strategy, str) and value_strategy == "nearest":
+                nearest_time = filters.get("nearest_time")
+                if not isinstance(nearest_time, time):
+                    logger.warning("nearest_time required for value_strategy='nearest', got %s", type(nearest_time))
                     return filtered_df.reset_index(drop=True)
                 
                 # Stelle sicher, dass timestamp-Spalte vorhanden ist
@@ -318,7 +314,7 @@ class StateProvider:
                     
                     # Extrahiere Uhrzeiten und berechne Differenzen in Sekunden
                     times = df["timestamp"].dt.time
-                    anchor_seconds = anchor_time.hour * 3600 + anchor_time.minute * 60 + anchor_time.second
+                    anchor_seconds = nearest_time.hour * 3600 + nearest_time.minute * 60 + nearest_time.second
                     df_seconds = [t.hour * 3600 + t.minute * 60 + t.second for t in times]
                     diffs = [abs(gs - anchor_seconds) for gs in df_seconds]
                     
