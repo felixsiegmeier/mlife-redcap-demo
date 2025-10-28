@@ -536,6 +536,7 @@ class DataParser:
             for key, lines in device_blocks.get(search_term, {}).items():
                 process_lines(lines, key)
 
+        print(f"Parsed {len(data_list)} entries for {search_term}")
         return pd.DataFrame([item.__dict__ for item in data_list])
      
     def _clean_medication_text(self, text: str) -> str:
