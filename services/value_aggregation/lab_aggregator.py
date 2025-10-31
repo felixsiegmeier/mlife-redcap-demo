@@ -17,34 +17,37 @@ class LabAggregator:
         self, state_provider: StateProvider, 
         date: date, 
         record_id: str, 
-        redcap_repeat_instrument: Optional[str] = None, 
-        redcap_repeat_instance: Optional[int] = None,
+        redcap_event_name: str,
+        redcap_repeat_instrument: str, 
+        redcap_repeat_instance: int,
         value_strategy: Optional[str] = None, 
         nearest_time: Optional[time] = None
         ) -> None:
         self.state_provider = state_provider
         self.date = date
         self.record_id = record_id
+        self.redcap_event_name = redcap_event_name
         self.redcap_repeat_instrument = redcap_repeat_instrument
         self.redcap_repeat_instance = redcap_repeat_instance
+        self.assess_time_point_labor = redcap_repeat_instance
         self.value_strategy = value_strategy or "median"
         self.nearest_time = nearest_time
 
     # Mapping: LabModel-Feld -> (Kategorie, Parameter)
     _FIELD_MAP: Dict[str, Tuple[str, str]] = {
         # Blutgase arteriell
-        "pco2": ("Blutgase arteriell", "PCO2"),
-        "po2": ("Blutgase arteriell", "PO2"),
+        "pc02": ("Blutgase arteriell", "PCO2"),
+        "p02": ("Blutgase arteriell", "PO2"),
         "ph": ("Blutgase arteriell", "PH"),
         "hco3": ("Blutgase arteriell", "HCO3"),
         "be": ("Blutgase arteriell", "ABEc"),
-        "sao2": ("Blutgase arteriell", "O2-SAETTIGUNG"),
-        "kalium": ("Blutgase arteriell", "KALIUM"),
-        "natrium": ("Blutgase arteriell", "NATRIUM"),
-        "glucose": ("Blutgase arteriell", "GLUCOSE"),
+        "sa02": ("Blutgase arteriell", "O2-SAETTIGUNG"),
+        "k": ("Blutgase arteriell", "KALIUM"),
+        "na": ("Blutgase arteriell", "NATRIUM"),
+        "gluc": ("Blutgase arteriell", "GLUCOSE"),
         "lactate": ("Blutgase arteriell", "LACTAT"),
         # Blutgase venös
-        "svo2": ("Blutgase venös", "O2-SAETTIGUNG"),
+        "sv02": ("Blutgase venös", "O2-SAETTIGUNG"),
         # Hämatologie & Gerinnung
         "wbc": ("Blutbild", "WBC"),
         "hb": ("Blutbild", "HB"),
@@ -59,12 +62,12 @@ class LabAggregator:
         "ggt": ("Enzyme", "GGT"),
         "ldh": ("Enzyme", "LDH"),
         "lipase": ("Enzyme", "LIPASE"),
-        "free_hb": ("Blutbild", "FREIES HB"),
+        "fhb": ("Blutbild", "FREIES HB"),
         "pct": ("Klinische Chemie", "PROCALCITONIN"),
-        "total_bilirubin": ("Klinische Chemie", "BILI"),
-        "creatinine": ("Klinische Chemie", "KREATININ"),
+        "bili": ("Klinische Chemie", "BILI"),
+        "crea": ("Klinische Chemie", "KREATININ"),
         "urea": ("Klinische Chemie", "HARNSTOFF"),
-        "creatinine_clearance": ("Klinische Chemie", "GFRKREA"),
+        "cc": ("Klinische Chemie", "GFRKREA"),
     }
 
     def _get_lab_value(self, category: str, parameter: str) -> Optional[float]:
@@ -89,65 +92,41 @@ class LabAggregator:
         return None if pd.isna(val) else float(val)
 
     def create_lab_entry(self) -> LabModel:
-        # Basismetadaten
-        assess_t = self.nearest_time if self.value_strategy == "nearest" else None
 
         values: Dict[str, Optional[float]] = {}
-        for field, (cat, param) in self._FIELD_MAP.items():
-            values[field] = self._get_lab_value(cat, param)
+        for field, (category, parameter) in self._FIELD_MAP.items():
+            values[field] = self._get_lab_value(category, parameter)
 
-        # Nutzlast mit Aliases zusammenbauen und per model_validate validieren
-        alias_map: Dict[str, str] = {
-            "pco2": "pc02",
-            "po2": "p02",
-            "ph": "ph",
-            "hco3": "hco3",
-            "be": "be",
-            "sao2": "sa02",
-            "kalium": "k",
-            "natrium": "na",
-            "glucose": "gluc",
-            "lactate": "lactate",
-            "svo2": "sv02",
-            "wbc": "wbc",
-            "hb": "hb",
-            "hct": "hct",
-            "plt": "plt",
-            "ptt": "ptt",
-            "quick": "quick",
-            "inr": "inr",
-            "ck": "ck",
-            "ckmb": "ckmb",
-            "ggt": "ggt",
-            "ldh": "ldh",
-            "lipase": "lipase",
-            "free_hb": "fhb",
-            "pct": "pct",
-            "total_bilirubin": "bili",
-            "creatinine": "crea",
-            "urea": "urea",
-            "creatinine_clearance": "cc",
-        }
+        # Nutzlast zusammenbauen und per model_validate validieren
+        impella_df = self.state_provider.query_data("impella", {"timestamp": self.date})
+        ecmo_df = self.state_provider.query_data("ecmo", {"timestamp": self.date})
+
+        def _has_value(df: Optional[pd.DataFrame]) -> bool:
+            return (
+            df is not None
+            and not df.empty
+            )
 
         payload: Dict[str, object] = {
             "record_id": self.record_id,
+            "redcap_event_name": self.redcap_event_name,
             "redcap_repeat_instrument": self.redcap_repeat_instrument,
             "redcap_repeat_instance": self.redcap_repeat_instance,
             "assess_date_labor": self.date,
-            "date_assess_labor": self.date,
-            "time_assess_labor": assess_t,
+            "assess_time_point_labor": self.assess_time_point_labor,
             "art_site": WithdrawalSite.UNKNOWN,
+            "na_post_2": 1.0,
+            "ecmella_2": 1 if (_has_value(impella_df) and _has_value(ecmo_df)) else 0,
         }
 
-        for field, val in values.items():
-            alias = alias_map.get(field)
-            if alias is not None and val is not None:
-                payload[alias] = val
+        for field, value in values.items():
+            if value is not None:
+                payload[field] = value
 
         return LabModel.model_validate(payload)
 
 
-def create_lab_entry(record_date: date, value_strategy: str = "median", nearest_time: Optional[time] = None) -> LabModel:
+def create_lab_entry(record_date: date, redcap_event_name: str, redcap_repeat_instrument: str, redcap_repeat_instance: int, value_strategy: str = "median", nearest_time: Optional[time] = None) -> LabModel:
     """Kompatibilitäts-Wrapper für Views: erstellt ein LabModel für das gegebene Datum.
 
     - Ermittelt record_id aus dem globalen State (selected_patient_id), fällt andernfalls auf "unknown" zurück.
@@ -156,5 +135,5 @@ def create_lab_entry(record_date: date, value_strategy: str = "median", nearest_
     """
     state = state_provider.get_state()
     record_id = getattr(state, "selected_patient_id", None) or "unknown"
-    aggregator = LabAggregator(state_provider, record_date, record_id, value_strategy=value_strategy, nearest_time=nearest_time)
+    aggregator = LabAggregator(state_provider, record_date, record_id, redcap_event_name=redcap_event_name, redcap_repeat_instrument=redcap_repeat_instrument, redcap_repeat_instance=redcap_repeat_instance, value_strategy=value_strategy, nearest_time=nearest_time)
     return aggregator.create_lab_entry()
