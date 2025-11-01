@@ -245,8 +245,16 @@ class StateProvider:
         # 5. Aggregation (value_strategy) anwenden, falls angegeben
         value_strategy = filters.get("value_strategy")
         if value_strategy and not filtered_df.empty and "value" in filtered_df.columns:
-            # Gruppierungsspalten bestimmen (parameter und/oder category, falls vorhanden)
+            # Gruppierungsspalten bestimmen (parameter, category und date falls vorhanden)
             group_cols = [col for col in ("parameter", "category") if col in filtered_df.columns]
+            
+            # Wenn timestamp vorhanden ist, füge date als Gruppierungsspalte hinzu
+            if "timestamp" in filtered_df.columns:
+                # Erstelle temporäre date-Spalte für Gruppierung
+                temp_df = filtered_df.copy()
+                temp_df["date"] = temp_df["timestamp"].dt.date
+                group_cols.insert(0, "date")  # date zuerst
+                filtered_df = temp_df
 
             # Hilfsfunktion für numerische Aggregation
             def _aggregate_numeric(series: pd.Series, agg: str) -> float:
@@ -271,6 +279,14 @@ class StateProvider:
                     aggregated = pd.DataFrame(
                         {"value": [_aggregate_numeric(filtered_df["value"], value_strategy)]}
                     )
+                # Wenn date hinzugefügt wurde, stelle sicher dass es datetime.date ist und setze als erste Spalte
+                if "date" in aggregated.columns:
+                    # Stelle sicher, dass date datetime.date ist (groupby kann es schon konvertiert haben)
+                    if pd.api.types.is_datetime64_any_dtype(aggregated["date"]):
+                        aggregated["date"] = aggregated["date"].dt.date
+                    # Setze date als erste Spalte
+                    cols = ["date"] + [col for col in aggregated.columns if col != "date"]
+                    aggregated = aggregated[cols]
                 return aggregated.reset_index(drop=True)
 
             # First oder Last: Zeitbasierte Auswahl (sortiert nach timestamp)

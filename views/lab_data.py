@@ -1,30 +1,28 @@
-from state_provider.state_provider import get_state, save_state
+from state_provider.state_provider_class import state_provider
 import streamlit as st
 import altair as alt
 import pandas as pd
 
-# Still using old StateProvider functions 
-# -> Update to use new StateProvider methods in the future
-
 def render_lab_data():
     
     def category_picker():
-        state = get_state()
+        state = state_provider.get_state()
         with st.expander("Categories"):
-            categories =  state.parsed_data.lab["category"].unique().tolist()
+            lab_data = state_provider.query_data("lab")
+            categories = lab_data["category"].unique().tolist()
             state.lab_ui.selected_categories = st.pills(
                 label="Select categories",
                 options=categories,
                 selection_mode="multi",
             )
-            save_state(state)
+            state_provider.save_state(state)
 
     def parameter_picker():
-        state = get_state()
+        state = state_provider.get_state()
         with st.expander("Parameters"):
             if state.lab_ui.selected_categories:
-                filtered_data = state.parsed_data.lab[state.parsed_data.lab["category"].isin(state.lab_ui.selected_categories)]
-                parameters = filtered_data["parameter"].unique().tolist()
+                lab_data = state_provider.query_data("lab", {"category": state.lab_ui.selected_categories})
+                parameters = lab_data["parameter"].unique().tolist()
                 state.lab_ui.selected_parameters = st.pills(
                     label="Select parameters",
                     options=parameters,
@@ -33,43 +31,30 @@ def render_lab_data():
             else:
                 st.warning("Please select at least one category to see available parameters.")
                 state.lab_ui.selected_parameters = []
-            save_state(state)
+            state_provider.save_state(state)
 
     def get_filtered_lab():
-        state = get_state()
-        lab = state.parsed_data.lab
-        # Filter by selected categories and parameters
-        filtered = lab[
-            lab["category"].isin(state.lab_ui.selected_categories) &
-            lab["parameter"].isin(state.lab_ui.selected_parameters)
-        ]
-        # Filter by selected time range
+        state = state_provider.get_state()
+        filters = {}
+        if state.lab_ui.selected_categories:
+            filters["category"] = state.lab_ui.selected_categories
+        if state.lab_ui.selected_parameters:
+            filters["parameter"] = state.lab_ui.selected_parameters
         if hasattr(state, "selected_time_range") and state.selected_time_range:
             start, end = state.selected_time_range
-            filtered = filtered[
-                (filtered["timestamp"] >= start) &
-                (filtered["timestamp"] <= end)
-            ]
-        if state.lab_ui.show_median:
-            # Convert timestamp to date
-            filtered = filtered.copy()
-            filtered["date"] = filtered["timestamp"].dt.date
-            # Group by date, category, parameter and calculate median of 'value', ignoring NaN and non-numeric values
-            filtered = (
-                filtered
-                .groupby(["date", "category", "parameter"], as_index=False)
-                .agg({"value": lambda x: pd.to_numeric(x, errors='coerce').median(skipna=True)})
-            )
-            # Rename 'date' column to 'timestamp' for consistency
-            filtered = filtered.rename(columns={"date": "timestamp"})
-        return filtered
+            filters["timestamp"] = [start, end]
+        is_aggregated = state.lab_ui.show_median
+        if is_aggregated:
+            filters["value_strategy"] = "median"
+        filtered = state_provider.query_data("lab", filters)
+        return filtered, is_aggregated
 
     def median_picker():
-        state = get_state()
+        state = state_provider.get_state()
         state.lab_ui.show_median = st.checkbox("Show median value")
-        save_state(state)
+        state_provider.save_state(state)
 
-    state = get_state()
+    state = state_provider.get_state()
     st.header("Lab Data")
     if hasattr(state, "selected_time_range") and state.selected_time_range:
         start, end = state.selected_time_range
@@ -84,15 +69,17 @@ def render_lab_data():
     else:
         st.warning("Please select at least one category.")
         return
-    filtered_lab = get_filtered_lab()
+    filtered_lab, is_aggregated = get_filtered_lab()
     st.write(filtered_lab)
     
     if not filtered_lab.empty:
+        x_field = "date:T" if is_aggregated else "timestamp:T"
+        tooltip_fields = ["date:T", "parameter:N", "value:Q"] if is_aggregated else ["timestamp:T", "parameter:N", "value:Q"]
         chart = alt.Chart(filtered_lab).mark_line(point=True).encode(
-            x="timestamp:T",
+            x=x_field,
             y="value:Q",
             color="parameter:N",
-            tooltip=["timestamp:T", "parameter:N", "value:Q"]
+            tooltip=tooltip_fields
         ).properties(
             width=700,
             height=400,
