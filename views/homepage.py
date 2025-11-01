@@ -4,65 +4,67 @@ from datetime import datetime
 import pandas as pd
 
 def render_ecmo_time_ranges():
-    state = state_provider.get_state()
-    try:
-        df = state.parsed_data.ecmo
-        ecmos = df['category'].dropna().unique().tolist()
-        for ecmo in ecmos:
-            try:
-                ts = df[df['category'] == ecmo]['timestamp']
-                ts = pd.to_datetime(ts, errors='coerce').dropna()
-                if ts.empty:
-                    raise ValueError("Keine gültigen Timestamps gefunden")
-                start = ts.min().date().strftime("%d.%m.%Y")
-                end = ts.max().date().strftime("%d.%m.%Y")
-                st.markdown(f"**<u>{ecmo}</u>: {start} - {end}**", unsafe_allow_html=True)
-            except Exception:
-                pass
-    except Exception:
-        st.write("No valid ECMO data available")
+    ecmo_time_ranges = state_provider.get_device_time_ranges("ecmo")
+
+    # Cleanup required to remove invalid entries, e.g. "ECMO-Durchtrittsstelle"
+    clean_ecmo_time_ranges = []
+    for device, start, end in ecmo_time_ranges:
+        if "ecmo " in device.lower() and device.lower().startswith("ecmo"):
+            clean_ecmo_time_ranges.append((device, start, end))
+
+    if not len(clean_ecmo_time_ranges):
+        st.write("No valid ECMO time ranges found.")
         return
-    
+
+    for device, start, end in clean_ecmo_time_ranges:
+        st.markdown(f"**<u>{device}</u>: {start.strftime('%d.%m.%Y %H:%M')} - {end.strftime('%d.%m.%Y %H:%M')}**", unsafe_allow_html=True)
+
 def render_impella_time_ranges():
-    state = state_provider.get_state()
-    try:
-        df = state.parsed_data.impella
-        impellas = df['category'].dropna().unique().tolist()
-        for impella in impellas:
-            try:
-                ts = df[df['category'] == impella]['timestamp']
-                ts = pd.to_datetime(ts, errors='coerce').dropna()
-                if ts.empty:
-                    raise ValueError("Keine gültigen Timestamps gefunden")
-                start = ts.min().date().strftime("%d.%m.%Y")
-                end = ts.max().date().strftime("%d.%m.%Y")
-                st.markdown(f"**<u>{impella}</u>: {start} - {end}**", unsafe_allow_html=True)
-            except Exception:
-                pass
-    except Exception:
-        st.write("No valid Impella data available")
+    impella_time_ranges = state_provider.get_device_time_ranges("impella")
+
+    # Cleanup
+    clean_impella_time_ranges = []
+    for device, start, end in impella_time_ranges:
+        if "impella " in device.lower() and device.lower().startswith("impella"):
+            clean_impella_time_ranges.append((device, start, end))
+
+    if not len(clean_impella_time_ranges):
+        st.write("No valid Impella time ranges found.")
         return
+
+    for device, start, end in clean_impella_time_ranges:
+        st.markdown(f"**<u>{device}</u>: {start.strftime('%d.%m.%Y %H:%M')} - {end.strftime('%d.%m.%Y %H:%M')}**", unsafe_allow_html=True)
 
 def render_crrt_time_ranges():
-    state = state_provider.get_state()
-    try:
-        df = state.parsed_data.crrt
-        crrts = df['category'].dropna().unique().tolist()
-        for crrt in crrts:
-            try:
-                ts = df[df['category'] == crrt]['timestamp']
-                ts = pd.to_datetime(ts, errors='coerce').dropna()
-                if ts.empty:
-                    raise ValueError("Keine gültigen Timestamps gefunden")
-                start = ts.min().date().strftime("%d.%m.%Y")
-                end = ts.max().date().strftime("%d.%m.%Y")
-                st.markdown(f"**<u>{crrt}</u>: {start} - {end}**", unsafe_allow_html=True)
-            except Exception:
-                pass
-    except Exception:
-        st.write("No valid CRRT data available")
+    crrt_time_ranges = state_provider.get_device_time_ranges("crrt")
+
+    if not len(crrt_time_ranges):
+        st.write("No valid CRRT time ranges found.")
         return
 
+    for device, start, end in crrt_time_ranges:
+        st.markdown(f"**<u>{device}</u>: {start.strftime('%d.%m.%Y %H:%M')} - {end.strftime('%d.%m.%Y %H:%M')}**", unsafe_allow_html=True)
+
+def render_set_selected_time_range_to_mcs_button():
+    mcs_time_ranges = []
+    mcs_time_ranges.extend(data for data in state_provider.get_device_time_ranges("impella"))
+    mcs_time_ranges.extend(data for data in state_provider.get_device_time_ranges("ecmo"))
+    print(mcs_time_ranges)
+
+    if not len(mcs_time_ranges):
+        return
+
+    try:
+        mcs_start_date = min(range.start for range in mcs_time_ranges)
+        mcs_end_date = max(range.end for range in mcs_time_ranges)
+    except ValueError:
+        print("Error occurred while determining MCS time range.")
+        return
+
+    def set_mcs_range():
+        state_provider.set_selected_time_range(mcs_start_date, mcs_end_date)
+
+    st.button("Set Selected Time Range to MCS", on_click=set_mcs_range, help="Set the selected time range to the cumulative time span of MCS devices.")
 
 def render_homepage():
     st.header("Overview")
@@ -95,6 +97,6 @@ def render_homepage():
     st.subheader("MCS Time Range")
     render_ecmo_time_ranges()
     render_impella_time_ranges()
-
+    render_set_selected_time_range_to_mcs_button()
     st.subheader("CRRT Time Range")
     render_crrt_time_ranges()

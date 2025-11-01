@@ -5,6 +5,7 @@ import pandas as pd
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 # from schemas.db_schemas.vitals import VentilationType  # not yet defined in db schema
 import logging
+from dataclasses import dataclass
 
 # Import der neuen DataParser Klasse
 from services.data_parser import DataParser
@@ -13,6 +14,14 @@ from schemas.parse_schemas.lab import LabModel
 
 logger = logging.getLogger(__name__)
 
+@dataclass
+class DeviceTimeRange:
+    device: str
+    start: datetime
+    end: datetime
+
+    def __iter__(self):
+        return iter((self.device, self.start, self.end))
 
 class StateProvider: 
     def __init__(self, data_parser: Optional[DataParser] = None):
@@ -73,6 +82,17 @@ class StateProvider:
             all_patient_data=all_patient_data
         )
         
+        # Set implant times from device time ranges
+        ecmo_ranges = self.get_device_time_ranges('ecmo')
+        if ecmo_ranges:
+            earliest_start = min(range.start for range in ecmo_ranges)
+            state.ecls_implant_time = earliest_start.time()
+        
+        impella_ranges = self.get_device_time_ranges('impella')
+        if impella_ranges:
+            earliest_start = min(range.start for range in impella_ranges)
+            state.impella_implant_time = earliest_start.time()
+        
         state.time_range = time_range_dt
         state.selected_time_range = time_range_dt
         state.last_updated = datetime.now()
@@ -87,33 +107,6 @@ class StateProvider:
     def has_parsed_data(self) -> bool:
         state = self.get_state()
         return state.parsed_data is not None
-
-    def get_device_time_ranges(self, device: str) -> Optional[pd.DataFrame]:
-        """Deprecated: Use query_data('devices', {'category': device}) and compute time ranges manually."""
-
-        device_df = self.query_data("devices", {"category": device})
-        if device_df.empty:
-            return None
-
-        try:
-            time_ranges = []
-            for category in device_df.get("category", pd.Series(dtype=object)).dropna().unique():
-                cat_df = device_df[device_df["category"] == category]
-                if cat_df.empty or "timestamp" not in cat_df.columns:
-                    continue
-                timestamps = pd.to_datetime(cat_df["timestamp"], errors="coerce").dropna()
-                if timestamps.empty:
-                    continue
-                time_ranges.append(
-                    {
-                        "category": category,
-                        "start": timestamps.min().date(),
-                        "end": timestamps.max().date(),
-                    }
-                )
-            return pd.DataFrame(time_ranges) if time_ranges else None
-        except Exception:
-            return None
 
     def query_data(self, data_source: str, filters: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
         """
@@ -366,9 +359,37 @@ class StateProvider:
                 return True
         return False
 
+    def get_record_id(self) -> str | None:
+        state = self.get_state()
+        return state.record_id
+
     def get_time_range(self) -> Optional[Tuple]:
         state = self.get_state()
         return state.time_range
+
+    def get_device_time_ranges(self, device: str) -> list[DeviceTimeRange]:
+        state = self.get_state()
+        if not state.parsed_data:
+            return []
+
+        device_df = self.query_data(device)
+        if not isinstance(device_df, pd.DataFrame) or device_df.empty:
+            return []
+
+        try:
+            time_ranges = []
+            for category in device_df["category"].unique():
+                category_df = device_df[device_df["category"] == category]
+                timestamps = pd.to_datetime(category_df["timestamp"], errors="coerce").dropna()
+                if not timestamps.empty:
+                    time_ranges.append(DeviceTimeRange(
+                        device=category,
+                        start=timestamps.min(),
+                        end=timestamps.max()
+                    ))
+            return time_ranges
+        except Exception:
+            return []
 
     def get_time_of_mcs(self, date: datetime) -> int:
         """
@@ -405,6 +426,7 @@ class StateProvider:
         return state.selected_view
 
     def set_selected_time_range(self, start_date, end_date) -> None:
+        print(f"Setting selected time range: {start_date} - {end_date}")
         state = self.get_state()
         state.selected_time_range = (start_date, end_date)
         self.save_state(state)
@@ -450,5 +472,23 @@ class StateProvider:
     def get_respiration_type(self, date: datetime) -> Optional[str]:
         pass
         # Hier weiter machen => evtl. anhand Vorhandensein Tubus, Beatmungseinstellungen (vorhandensein), HFNC-Vorhandensein
+
+    def get_impella_implant_time(self) -> time | None:
+        state = self.get_state()
+        return state.impella_implant_time
+
+    def set_impella_implant_time(self, time: time) -> None:
+        state = self.get_state()
+        state.impella_implant_time = time
+        self.save_state(state)
+
+    def get_ecls_implant_time(self) -> time | None:
+        state = self.get_state()
+        return state.ecls_implant_time
+
+    def set_ecls_implant_time(self, time: time) -> None:
+        state = self.get_state()
+        state.ecls_implant_time = time
+        self.save_state(state)
 
 state_provider = StateProvider()

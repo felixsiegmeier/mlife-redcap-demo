@@ -39,7 +39,7 @@ class AppState(BaseModel):
     # Allow arbitrary types in nested models (safe to include here as well)
     model_config = {"arbitrary_types_allowed": True}
     last_updated: Optional[datetime] = None
-    selected_patient_id: Optional[str] = None
+    record_id: Optional[str] = None
     parsed_data: Optional[ParsedData] = None
     selected_view: Views = Views.STARTPAGE
     time_range: Optional[tuple[datetime, datetime]] = None
